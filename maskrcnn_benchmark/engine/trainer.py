@@ -63,6 +63,8 @@ def do_train(
         iteration = iteration + 1
         arguments["iteration"] = iteration
 
+        # Q: How can scheduler affect optimizer in terms of learning rate warm-up? They are two separate objects.
+        # A: Inside the scheduler, there is an optimizer reference.
         scheduler.step()
 
         images = images.to(device)

@@ -11,7 +11,7 @@ class Registry(dict):
     A helper class for managing registering modules, it extends a dictionary
     and provides a register functions.
 
-    Eg. creeting a registry:
+    Eg. creating a registry:
         some_registry = Registry({"default": default_module})
 
     There're two ways of registering new modules:

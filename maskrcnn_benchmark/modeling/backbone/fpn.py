@@ -32,6 +32,7 @@ class FPN(nn.Module):
 
             if in_channels == 0:
                 continue
+            # lateral connection
             inner_block_module = conv_block(in_channels, out_channels, 1)
             layer_block_module = conv_block(out_channels, out_channels, 3, 1)
             self.add_module(inner_block, inner_block_module)

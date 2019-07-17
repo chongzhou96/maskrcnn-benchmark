@@ -133,6 +133,7 @@ class RPNLossComputation(object):
 # This function should be overwritten in RetinaNet
 def generate_rpn_labels(matched_targets):
     matched_idxs = matched_targets.get_field("matched_idxs")
+    # has object or not
     labels_per_image = matched_idxs >= 0
     return labels_per_image
 

@@ -47,6 +47,8 @@ class RetinaNetPostProcessor(RPNPostProcessor):
         self.num_classes = num_classes
 
         if box_coder is None:
+            # Q: How are the weights chosen?
+            # A: cfg.MODEL.ROI_HEADS.BBOX_REG_WEIGHTS.
             box_coder = BoxCoder(weights=(10., 10., 5., 5.))
         self.box_coder = box_coder
  
@@ -69,11 +71,12 @@ class RetinaNetPostProcessor(RPNPostProcessor):
         A = box_regression.size(1) // 4
         C = box_cls.size(1) // A
 
-        # put in the same format as anchors
+        # put in the same format as anchors (N, H*W*A, C)
         box_cls = permute_and_flatten(box_cls, N, A, C, H, W)
         box_cls = box_cls.sigmoid()
-
+        # box regression is class-agnostic
         box_regression = permute_and_flatten(box_regression, N, A, 4, H, W)
+        # Q: Seems redundant?
         box_regression = box_regression.reshape(N, -1, 4)
 
         num_anchors = A * H * W
@@ -98,14 +101,22 @@ class RetinaNetPostProcessor(RPNPostProcessor):
             # TODO:Yang: Not easy to do. Because the numbers of detections are
             # different in each image. Therefore, this part needs to be done
             # per image. 
+
+            # After the following line, per_box_cls becomes a vector
             per_box_cls = per_box_cls[per_candidate_inds]
  
             per_box_cls, top_k_indices = \
                     per_box_cls.topk(per_pre_nms_top_n, sorted=False)
 
+            # per_candidate_inds (H*W*A, C), per_candidate_nonzeros (top_k_out_of_H*W*A*C, 2)
+            # Note that: the boxes regressed from the same anchor with different class labels are treated as multiple dectections.
             per_candidate_nonzeros = \
                     per_candidate_inds.nonzero()[top_k_indices, :]
 
+            # Q: What's per_box_loc and per_class?
+            # A: The index of the anchor and the index of the class, 
+            # so that the confidence of the class per_class[i] of the anchor at per_box_loc[i] is high enough to survive.
+            # Note that: index_of_class + 1 = class_label.
             per_box_loc = per_candidate_nonzeros[:, 0]
             per_class = per_candidate_nonzeros[:, 1]
             per_class += 1
@@ -115,7 +126,8 @@ class RetinaNetPostProcessor(RPNPostProcessor):
                 per_anchors.bbox[per_box_loc, :].view(-1, 4)
             )
 
-            boxlist = BoxList(detections, per_anchors.size, mode="xyxy")
+            image_size = per_anchors.size
+            boxlist = BoxList(detections, image_size, mode="xyxy")
             boxlist.add_field("labels", per_class)
             boxlist.add_field("scores", per_box_cls)
             boxlist = boxlist.clip_to_image(remove_empty=False)
@@ -145,6 +157,7 @@ class RetinaNetPostProcessor(RPNPostProcessor):
                 boxes_j = boxes[inds, :].view(-1, 4)
                 boxlist_for_class = BoxList(boxes_j, boxlist.size, mode="xyxy")
                 boxlist_for_class.add_field("scores", scores_j)
+                # per class nms
                 boxlist_for_class = boxlist_nms(
                     boxlist_for_class, self.nms_thresh,
                     score_field="scores"

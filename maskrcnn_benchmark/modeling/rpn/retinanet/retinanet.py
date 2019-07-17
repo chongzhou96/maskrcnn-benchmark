@@ -116,7 +116,7 @@ class RetinaNetModule(torch.nn.Module):
             features (list[Tensor]): features computed from the images that are
                 used for computing the predictions. Each tensor in the list
                 correspond to different feature levels
-            targets (list[BoxList): ground-truth boxes present in the image (optional)
+            targets (list[BoxList]): ground-truth boxes present in the image (optional)
 
         Returns:
             boxes (list[BoxList]): the predicted boxes from the RPN, one BoxList per

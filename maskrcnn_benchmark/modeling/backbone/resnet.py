@@ -252,8 +252,11 @@ class Bottleneck(nn.Module):
         super(Bottleneck, self).__init__()
 
         self.downsample = None
+        # Q: What's this if-condition used for?
+        # A: If the stage performs downsample, the number of channels will increase.
         if in_channels != out_channels:
             down_stride = stride if dilation == 1 else 1
+            # Downsample the identity.
             self.downsample = nn.Sequential(
                 Conv2d(
                     in_channels, out_channels,
@@ -282,7 +285,7 @@ class Bottleneck(nn.Module):
             bias=False,
         )
         self.bn1 = norm_func(bottleneck_channels)
-        # TODO: specify init for the above
+        # TODO: specify init for the below
         with_dcn = dcn_config.get("stage_with_dcn", False)
         if with_dcn:
             deformable_groups = dcn_config.get("deformable_groups", 1)

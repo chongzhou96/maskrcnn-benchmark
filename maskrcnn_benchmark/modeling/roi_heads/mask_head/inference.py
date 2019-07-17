@@ -42,6 +42,8 @@ class MaskPostProcessor(nn.Module):
         labels = [bbox.get_field("labels") for bbox in boxes]
         labels = torch.cat(labels)
         index = torch.arange(num_masks, device=labels.device)
+        # Q: What's the None used for?
+        # A: mask_prob (after) (num_masks, 1, HxW)
         mask_prob = mask_prob[index, labels][:, None]
 
         boxes_per_image = [len(box) for box in boxes]
@@ -87,7 +89,7 @@ class MaskPostProcessorCOCOFormat(MaskPostProcessor):
 
 # the next two functions should be merged inside Masker
 # but are kept here for the moment while we need them
-# temporarily gor paste_mask_in_image
+# temporarily for paste_mask_in_image
 def expand_boxes(boxes, scale):
     w_half = (boxes[:, 2] - boxes[:, 0]) * .5
     h_half = (boxes[:, 3] - boxes[:, 1]) * .5
@@ -173,6 +175,7 @@ class Masker(object):
         boxes = boxes.convert("xyxy")
         im_w, im_h = boxes.size
         res = [
+            # masks (num_masks_per_image, 1, HxW)
             paste_mask_in_image(mask[0], box, im_h, im_w, self.threshold, self.padding)
             for mask, box in zip(masks, boxes.bbox)
         ]
