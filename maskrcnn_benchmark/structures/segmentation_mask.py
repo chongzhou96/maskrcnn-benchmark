@@ -539,12 +539,15 @@ class SegmentationMask(object):
 
         return SegmentationMask(converted_instances, self.size, mode)
 
-    def get_mask_tensor(self):
+    def get_mask_tensor(self, do_squeeze=True):
         instances = self.instances
         if self.mode == "poly":
             instances = instances.convert_to_binarymask()
         # If there is only 1 instance
-        return instances.masks.squeeze(0)
+        if do_squeeze:
+            return instances.masks.squeeze(0)
+        else:
+            return instances.masks
 
     def __len__(self):
         return len(self.instances)

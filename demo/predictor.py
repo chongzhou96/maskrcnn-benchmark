@@ -9,11 +9,15 @@ from maskrcnn_benchmark.structures.image_list import to_image_list
 from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
 from maskrcnn_benchmark import layers as L
 from maskrcnn_benchmark.utils import cv2_util
+from maskrcnn_benchmark.layers.misc import interpolate
+
+DEBUG = False
 
 class Resize(object):
-    def __init__(self, min_size, max_size):
+    def __init__(self, min_size, max_size, preserve_aspect_ratio=True):
         self.min_size = min_size
         self.max_size = max_size
+        self.preserve_aspect_ratio = preserve_aspect_ratio
 
     # modified from torchvision to add support for max size
     def get_size(self, image_size):
@@ -39,7 +43,10 @@ class Resize(object):
         return (oh, ow)
 
     def __call__(self, image):
-        size = self.get_size(image.size)
+        if self.preserve_aspect_ratio:
+            size = self.get_size(image.size)
+        else:
+            size = (self.min_size, self.min_size)
         image = F.resize(image, size)
         return image
 class COCODemo(object):
@@ -134,14 +141,13 @@ class COCODemo(object):
         confidence_threshold=0.7,
         show_mask_heatmaps=False,
         masks_per_dim=2,
-        min_image_size=224,
     ):
         self.cfg = cfg.clone()
         self.model = build_detection_model(cfg)
         self.model.eval()
         self.device = torch.device(cfg.MODEL.DEVICE)
         self.model.to(self.device)
-        self.min_image_size = min_image_size
+        self.use_masker = not cfg.MODEL.YOLACT_ON
 
         save_dir = cfg.OUTPUT_DIR
         checkpointer = DetectronCheckpointer(cfg, self.model, save_dir=save_dir)
@@ -183,7 +189,7 @@ class COCODemo(object):
         transform = T.Compose(
             [
                 T.ToPILImage(),
-                Resize(min_size, max_size),
+                Resize(min_size, max_size, cfg.INPUT.PRESERVE_ASPECT_RATIO),
                 T.ToTensor(),
                 to_bgr_transform,
                 normalize_transform,
@@ -208,7 +214,7 @@ class COCODemo(object):
         if self.show_mask_heatmaps:
             return self.create_mask_montage(result, top_predictions)
         result = self.overlay_boxes(result, top_predictions)
-        if self.cfg.MODEL.MASK_ON:
+        if self.cfg.MODEL.MASK_ON or self.cfg.MODEL.YOLACT_ON:
             result = self.overlay_mask(result, top_predictions)
         if self.cfg.MODEL.KEYPOINT_ON:
             result = self.overlay_keypoints(result, top_predictions)
@@ -244,13 +250,31 @@ class COCODemo(object):
         height, width = original_image.shape[:-1]
         prediction = prediction.resize((width, height))
 
+        # if DEBUG:
+        #     print('size of prediction:', prediction.size)
+        #     print('shape of mask:', prediction.get_field("mask").shape)
+
         if prediction.has_field("mask"):
             # if we have masks, paste the masks in the right position
             # in the image, as defined by the bounding boxes
             masks = prediction.get_field("mask")
             # always single image is passed at a time
-            masks = self.masker([masks], [prediction])[0]
+            if self.use_masker:
+                masks = self.masker([masks], [prediction])[0]
+            else:
+                # resize (height comes first here!)
+                masks = interpolate(
+                    input=masks.float(),
+                    size=(height, width),
+                    mode="bilinear",
+                    align_corners=False,
+                ).type_as(masks)
             prediction.add_field("mask", masks)
+
+        if DEBUG:
+            print('size of prediction:', prediction.size)
+            print('shape of mask:', prediction.get_field("mask").shape)
+
         return prediction
 
     def select_top_predictions(self, predictions):

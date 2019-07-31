@@ -58,6 +58,7 @@ class MaskPostProcessor(nn.Module):
             for field in box.fields():
                 bbox.add_field(field, box.get_field(field))
             bbox.add_field("mask", prob)
+
             results.append(bbox)
 
         return results

@@ -6,6 +6,7 @@ from torch import nn
 from maskrcnn_benchmark.modeling import registry
 from maskrcnn_benchmark.modeling.box_coder import BoxCoder
 from maskrcnn_benchmark.modeling.rpn.retinanet.retinanet import build_retinanet
+from maskrcnn_benchmark.modeling.rpn.yolact.yolact import build_yolact
 from .loss import make_rpn_loss_evaluator
 from .anchor_generator import make_anchor_generator
 from .inference import make_rpn_postprocessor
@@ -203,5 +204,7 @@ def build_rpn(cfg, in_channels):
     """
     if cfg.MODEL.RETINANET_ON:
         return build_retinanet(cfg, in_channels)
+    elif cfg.MODEL.YOLACT_ON:
+        return build_yolact(cfg, in_channels)
 
     return RPNModule(cfg, in_channels)

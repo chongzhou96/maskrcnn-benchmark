@@ -25,11 +25,12 @@ class Compose(object):
 
 
 class Resize(object):
-    def __init__(self, min_size, max_size):
+    def __init__(self, min_size, max_size, preserve_aspect_ratio=True):
         if not isinstance(min_size, (list, tuple)):
             min_size = (min_size,)
         self.min_size = min_size
         self.max_size = max_size
+        self.preserve_aspect_ratio = preserve_aspect_ratio
 
     # modified from torchvision to add support for max size
     def get_size(self, image_size):
@@ -55,7 +56,10 @@ class Resize(object):
         return (oh, ow)
 
     def __call__(self, image, target=None):
-        size = self.get_size(image.size)
+        if self.preserve_aspect_ratio:
+            size = self.get_size(image.size)
+        else:
+            size = (self.min_size[0], self.min_size[0])
         image = F.resize(image, size)
         if target is None:
             return image
@@ -105,6 +109,15 @@ class ToTensor(object):
     def __call__(self, image, target):
         return F.to_tensor(image), target
 
+# class ToTensor(object):
+#     def __init__(self, mask_to_tensor):
+#         self.mask_to_tensor = mask_to_tensor
+#     def __call__(self, image, target):
+#         image_tensor = F.to_tensor(image)
+#         if self.mask_to_tensor:
+#             masks = target.get_field("masks")
+            
+#         return image_tensor, target
 
 class Normalize(object):
     def __init__(self, mean, std, to_bgr255=True):

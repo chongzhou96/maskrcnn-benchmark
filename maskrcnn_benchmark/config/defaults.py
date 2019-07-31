@@ -24,6 +24,7 @@ _C.MODEL = CN()
 _C.MODEL.RPN_ONLY = False
 _C.MODEL.MASK_ON = False
 _C.MODEL.RETINANET_ON = False
+_C.MODEL.YOLACT_ON = False
 _C.MODEL.KEYPOINT_ON = False
 _C.MODEL.DEVICE = "cuda"
 _C.MODEL.META_ARCHITECTURE = "GeneralizedRCNN"
@@ -53,6 +54,8 @@ _C.INPUT.PIXEL_MEAN = [102.9801, 115.9465, 122.7717]
 _C.INPUT.PIXEL_STD = [1., 1., 1.]
 # Convert image to BGR format (for Caffe2 models), in range 0-255
 _C.INPUT.TO_BGR255 = True
+# Preserve the images aspect ratios while resizing
+_C.INPUT.PRESERVE_ASPECT_RATIO = True
 
 # Image ColorJitter
 _C.INPUT.BRIGHTNESS = 0.0
@@ -84,6 +87,8 @@ _C.DATALOADER.SIZE_DIVISIBILITY = 0
 # is compatible. This groups portrait images together, and landscape images
 # are not batched with portrait images.
 _C.DATALOADER.ASPECT_RATIO_GROUPING = True
+# sample a subset if greater than 0
+_C.DATALOADER.SUBSET_SIZE = -1
 
 
 # ---------------------------------------------------------------------------- #
@@ -312,6 +317,9 @@ _C.MODEL.RETINANET.USE_C5 = True
 # NOTE: this doesn't include the last conv for logits
 _C.MODEL.RETINANET.NUM_CONVS = 4
 
+# Whether or not share the feature extractors of cls/box/coeff heads
+_C.MODEL.RETINANET.SHARE_HEAD_TOWER = False
+
 # Weight for bbox_regression loss
 _C.MODEL.RETINANET.BBOX_REG_WEIGHT = 4.0
 
@@ -347,6 +355,21 @@ _C.MODEL.RETINANET.INFERENCE_TH = 0.05
 # NMS threshold used in RetinaNet
 _C.MODEL.RETINANET.NMS_TH = 0.4
 
+# ---------------------------------------------------------------------------- #
+# Yolact options
+# ---------------------------------------------------------------------------- #
+_C.MODEL.YOLACT = CN()
+
+_C.MODEL.YOLACT.NUM_PROTOTYPES = 32
+_C.MODEL.YOLACT.PROTO_SRC = 0
+_C.MODEL.YOLACT.PROTONET = ((256, 3, {'padding':1}), (256, 3, {'padding':1}), (256, 3, {'padding':1}), (None, -2, {}), (256, 3, {'padding':1}))
+_C.MODEL.YOLACT.PROTOTYPE_ACTIVATION = "relu"
+_C.MODEL.YOLACT.MASK_ACTIVATION = "sigmoid"
+_C.MODEL.YOLACT.COEFF_ACTIVATION = "tanh"
+_C.MODEL.YOLACT.CONVERT_MASK_TO_RLE = False
+_C.MODEL.YOLACT.MASK_TO_TRAIN = 100
+_C.MODEL.YOLACT.MASK_WEIGHT = 1.0
+_C.MODEL.YOLACT.MASK_WITH_LOGITS = False
 
 # ---------------------------------------------------------------------------- #
 # FBNet options

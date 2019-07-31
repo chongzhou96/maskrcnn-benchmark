@@ -8,7 +8,9 @@ from tqdm import tqdm
 from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
+from maskrcnn_benchmark.structures.mask_ops import convert_binary_to_rle, resize_rle
 
+DEBUG = True
 
 def do_coco_evaluation(
     dataset,
@@ -18,6 +20,7 @@ def do_coco_evaluation(
     iou_types,
     expected_results,
     expected_results_sigma_tol,
+    mask_is_rle,
 ):
     logger = logging.getLogger("maskrcnn_benchmark.inference")
 
@@ -44,7 +47,7 @@ def do_coco_evaluation(
         coco_results["bbox"] = prepare_for_coco_detection(predictions, dataset)
     if "segm" in iou_types:
         logger.info("Preparing segm results")
-        coco_results["segm"] = prepare_for_coco_segmentation(predictions, dataset)
+        coco_results["segm"] = prepare_for_coco_segmentation(predictions, dataset, mask_is_rle)
     if 'keypoints' in iou_types:
         logger.info('Preparing keypoints results')
         coco_results['keypoints'] = prepare_for_coco_keypoint(predictions, dataset)
@@ -57,7 +60,7 @@ def do_coco_evaluation(
             if output_folder:
                 file_path = os.path.join(output_folder, iou_type + ".json")
             res = evaluate_predictions_on_coco(
-                dataset.coco, coco_results[iou_type], file_path, iou_type
+                dataset.coco, coco_results[iou_type], file_path, dataset.ids, iou_type
             )
             results.update(res)
     logger.info(results)
@@ -78,6 +81,7 @@ def prepare_for_coco_detection(predictions, dataset):
         img_info = dataset.get_img_info(image_id)
         image_width = img_info["width"]
         image_height = img_info["height"]
+        
         prediction = prediction.resize((image_width, image_height))
         prediction = prediction.convert("xywh")
 
@@ -101,14 +105,12 @@ def prepare_for_coco_detection(predictions, dataset):
     return coco_results
 
 
-def prepare_for_coco_segmentation(predictions, dataset):
-    import pycocotools.mask as mask_util
-    import numpy as np
+def prepare_for_coco_segmentation(predictions, dataset, mask_is_rle):
 
     masker = Masker(threshold=0.5, padding=1)
     # assert isinstance(dataset, COCODataset)
     coco_results = []
-    for image_id, prediction in tqdm(enumerate(predictions)):
+    for image_id, prediction in tqdm(enumerate(predictions), total=len(predictions)):
         original_id = dataset.id_to_img_map[image_id]
         if len(prediction) == 0:
             continue
@@ -119,10 +121,6 @@ def prepare_for_coco_segmentation(predictions, dataset):
         prediction = prediction.resize((image_width, image_height))
         masks = prediction.get_field("mask")
         # t = time.time()
-        # Masker is necessary only if masks haven't been already resized.
-        if list(masks.shape[-2:]) != [image_height, image_width]:
-            masks = masker(masks.expand(1, -1, -1, -1, -1), prediction)
-            masks = masks[0]
         # logger.info('Time mask: {}'.format(time.time() - t))
         # prediction = prediction.convert('xywh')
 
@@ -132,12 +130,17 @@ def prepare_for_coco_segmentation(predictions, dataset):
 
         # rles = prediction.get_field('mask')
 
-        rles = [
-            mask_util.encode(np.array(mask[0, :, :, np.newaxis], order="F"))[0]
-            for mask in masks
-        ]
-        for rle in rles:
-            rle["counts"] = rle["counts"].decode("utf-8")
+        if not mask_is_rle:
+            # Masker is necessary only if masks haven't been already resized.
+            if list(masks.shape[-2:]) != [image_height, image_width]:
+                masks = masker(masks.expand(1, -1, -1, -1, -1), prediction)
+                masks = masks[0]
+            rles = convert_binary_to_rle(masks)
+        else:
+            # move the conversion from binary mask to rle to yolact inference in order to save memory
+            rles = masks
+            # resize masks
+            rles = resize_rle(rles, (image_height, image_width))
 
         mapped_labels = [dataset.contiguous_category_id_to_json_id[i] for i in labels]
 
@@ -303,7 +306,7 @@ def evaluate_box_proposals(
 
 
 def evaluate_predictions_on_coco(
-    coco_gt, coco_results, json_result_file, iou_type="bbox"
+    coco_gt, coco_results, json_result_file, imgIds, iou_type="bbox"
 ):
     import json
 
@@ -317,6 +320,7 @@ def evaluate_predictions_on_coco(
 
     # coco_dt = coco_gt.loadRes(coco_results)
     coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
+    coco_eval.params.imgIds = imgIds
     coco_eval.evaluate()
     coco_eval.accumulate()
     coco_eval.summarize()

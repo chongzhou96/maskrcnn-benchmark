@@ -38,7 +38,7 @@ def has_valid_annotation(anno):
 
 class COCODataset(torchvision.datasets.coco.CocoDetection):
     def __init__(
-        self, ann_file, root, remove_images_without_annotations, transforms=None
+        self, ann_file, root, remove_images_without_annotations, transforms=None, subset_size=-1,
     ):
         super(COCODataset, self).__init__(root, ann_file)
         # sort indices for reproducible results
@@ -53,6 +53,12 @@ class COCODataset(torchvision.datasets.coco.CocoDetection):
                 if has_valid_annotation(anno):
                     ids.append(img_id)
             self.ids = ids
+
+        # only evaluate on a subset
+        if subset_size > 0:
+            import random
+            random.seed(0)
+            self.ids = random.sample(self.ids, k=subset_size)
 
         self.categories = {cat['id']: cat['name'] for cat in self.coco.cats.values()}
 

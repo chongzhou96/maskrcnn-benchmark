@@ -43,3 +43,15 @@ def concat_box_prediction_layers(box_cls, box_regression):
     box_cls = cat(box_cls_flattened, dim=1).reshape(-1, C)
     box_regression = cat(box_regression_flattened, dim=1).reshape(-1, 4)
     return box_cls, box_regression
+
+def concat_coeffs_prediction_layers(coeffs, num_prototypes):
+    coeffs_flattened = []
+    for coeffs_per_level in coeffs:
+        N, AxC, H, W = coeffs_per_level.shape
+        C = num_prototypes
+        A = AxC // C
+        coeffs_per_level = permute_and_flatten(coeffs_per_level, N, A, C, H, W)
+        coeffs_flattened.append(coeffs_per_level)
+    coeffs = cat(coeffs_flattened, dim=1)
+    # coeffs = [coeffs_per_image for coeffs_per_image in coeffs]
+    return coeffs
