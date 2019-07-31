@@ -98,10 +98,6 @@ class YolactLossComputation(RetinaNetLossComputation):
 
             # mask scores are only computed on positive samples
             pos_inds = torch.nonzero(labels_per_image > 0).squeeze(1)
-            if pos_inds.size(0) > self.mask_to_train:
-                perm = torch.randperm(pos_inds.size(0))
-                select = perm[:self.mask_to_train]
-                pos_inds = pos_inds[select]
 
             # mask assembly
             mask_pred_per_image = prototypes_per_image.permute(1, 2, 0) @ coeffs_per_image[pos_inds].t()
@@ -109,10 +105,10 @@ class YolactLossComputation(RetinaNetLossComputation):
             if self.mask_activation is not None:
                 mask_pred_per_image = self.mask_activation(mask_pred_per_image)
 
-            if DEBUG:
-                with torch.no_grad():
-                    print('range of prototypes_per_image:',\
-                        prototypes_per_image.min(), prototypes_per_image.max())
+            # if DEBUG:
+            #     with torch.no_grad():
+            #         print('range of prototypes_per_image:',\
+            #             prototypes_per_image.min(), prototypes_per_image.max())
             #         print('range of coeffs_per_image:',\
             #             coeffs_per_image.min(), coeffs_per_image.max())
             #         print('range of mask_pred_per_image:',\
@@ -169,11 +165,19 @@ class YolactLossComputation(RetinaNetLossComputation):
 
         labels = torch.cat(labels, dim=0)
         regression_targets = torch.cat(regression_targets, dim=0)
+        pos_inds = torch.nonzero(labels > 0).squeeze(1)
+
         mask_pred = torch.cat(mask_pred, dim=0)
         device = mask_pred.device
         mask_targets = torch.cat(mask_targets, dim=0).to(device, dtype=torch.float32)
         gt_boxes_area = torch.cat(gt_boxes_area, dim=0)
-        pos_inds = torch.nonzero(labels > 0).squeeze(1)
+
+        if mask_pred.size(0) > self.mask_to_train:
+            perm = torch.randperm(mask_pred.size(0))
+            select = perm[:self.mask_to_train]
+            mask_pred = mask_pred[select]
+            mask_targets = mask_targets[select]
+            gt_boxes_area = gt_boxes_area[select]
 
         # only positive boxes contribute to regression loss and mask loss
         retinanet_regression_loss = smooth_l1_loss(
@@ -203,8 +207,11 @@ class YolactLossComputation(RetinaNetLossComputation):
 
         # reweight mask loss by dividing the area of ground-truth boxes
         yolact_mask_loss = yolact_mask_loss.sum(dim=(1, 2)) / gt_boxes_area
-        # yolact_mask_loss = yolact_mask_loss.mean() / (max(1, pos_inds.numel() * self.mask_norm))
         yolact_mask_loss = yolact_mask_loss.sum() / (max(1, pos_inds.numel() * self.mask_norm))
+        
+        if DEBUG:
+            print('pos_inds.numel():', pos_inds.numel())
+            print('gt_boxes_area.shape:', gt_boxes_area.shape)
 
         labels = labels.int()
         retinanet_cls_loss = self.box_cls_loss_func(

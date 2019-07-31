@@ -370,6 +370,7 @@ _C.MODEL.YOLACT.CONVERT_MASK_TO_RLE = False
 _C.MODEL.YOLACT.MASK_TO_TRAIN = 100
 _C.MODEL.YOLACT.MASK_WEIGHT = 1.0
 _C.MODEL.YOLACT.MASK_WITH_LOGITS = False
+_C.MODEL.YOLACT.USE_FAST_NMS = False
 
 # ---------------------------------------------------------------------------- #
 # FBNet options

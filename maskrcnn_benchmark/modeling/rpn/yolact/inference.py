@@ -19,8 +19,6 @@ if DEBUG:
     import matplotlib.pyplot as plt
     from torchvision.utils import save_image
 
-FAST_NMS = True
-
 class YolactPostProcessor(RetinaNetPostProcessor):
     """
     Performs post-processing on the outputs of the RetinaNet boxes and ProtoNet.
@@ -37,6 +35,7 @@ class YolactPostProcessor(RetinaNetPostProcessor):
         mask_activation,
         mask_threshold,
         convert_mask_to_rle,
+        use_fast_nms,
         box_coder=None,
     ):
         super(YolactPostProcessor, self).__init__(
@@ -46,6 +45,7 @@ class YolactPostProcessor(RetinaNetPostProcessor):
         self.mask_activation = mask_activation
         self.mask_threshold = mask_threshold
         self.convert_mask_to_rle = convert_mask_to_rle
+        self.use_fast_nms = use_fast_nms
 
     def forward_for_single_feature_map(self, anchors, box_cls, box_regression, coeffs):
         """
@@ -70,7 +70,7 @@ class YolactPostProcessor(RetinaNetPostProcessor):
 
         coeffs = permute_and_flatten(coeffs, N, A, K, H, W)
 
-        if FAST_NMS:
+        if self.use_fast_nms:
             num_anchors = A * H * W
             box_regression = cat([b for b in box_regression], dim=0)
             anchors_bbox = cat([a.bbox for a in anchors], dim=0)
@@ -243,7 +243,7 @@ class YolactPostProcessor(RetinaNetPostProcessor):
         for a, c, r, co in zip(anchors, box_cls, box_regression, coeffs):
             sampled_boxes.append(self.forward_for_single_feature_map(a, c, r, co))
 
-        if FAST_NMS:
+        if self.use_fast_nms:
             box_cls, bbox, coeffs = list(zip(*sampled_boxes))
             box_cls = cat(box_cls, dim=1)
             bbox = cat(bbox, dim=1)
@@ -428,6 +428,7 @@ def make_yolact_postprocessor(config, box_coder):
         mask_activation=_ACTIVATION_FUNC[config.MODEL.YOLACT.MASK_ACTIVATION],
         mask_threshold=config.MODEL.ROI_MASK_HEAD.POSTPROCESS_MASKS_THRESHOLD,
         convert_mask_to_rle=config.MODEL.YOLACT.CONVERT_MASK_TO_RLE,
+        use_fast_nms=config.MODEL.YOLACT.USE_FAST_NMS,
         box_coder=box_coder,
     )
 

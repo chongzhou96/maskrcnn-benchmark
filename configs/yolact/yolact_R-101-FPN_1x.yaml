@@ -53,16 +53,18 @@ MODEL:
     COEFF_ACTIVATION: "tanh"
     CONVERT_MASK_TO_RLE: True
     MASK_TO_TRAIN: 100
+    USE_FAST_NMS: True
+    # yolact (failed)
+    # MASK_WITH_LOGITS: True
     # yolact sigmoid (failed)
     # MASK_WEIGHT: 0.01
+    # MASK_WITH_LOGITS: False
+    # less mask weights (failed)
+    # MASK_WEIGHT: 0.1
     # MASK_WITH_LOGITS: False
     # yolact loss weight (working)
     MASK_WEIGHT: 1.0
     MASK_WITH_LOGITS: False
-    # less mask weights (failed)
-    # MASK_WEIGHT: 0.1
-    # yolact (failed)
-    # MASK_WITH_LOGITS: True
     
 DATASETS:
   TRAIN: ("coco_2017_train",)
