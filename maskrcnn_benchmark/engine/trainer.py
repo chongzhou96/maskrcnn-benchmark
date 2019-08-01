@@ -55,72 +55,78 @@ def do_train(
     model.train()
     start_training_time = time.time()
     end = time.time()
-    for iteration, (images, targets, _) in enumerate(data_loader, start_iter):
-        
-        if any(len(target) < 1 for target in targets):
-            logger.error(f"Iteration={iteration + 1} || Image Ids used for training {_} || targets Length={[len(target) for target in targets]}" )
-            continue
-        data_time = time.time() - end
-        iteration = iteration + 1
-        arguments["iteration"] = iteration
+    # try-except so you can use ctrl+c to save early and stop training
+    try:
+        for iteration, (images, targets, _) in enumerate(data_loader, start_iter):
+            
+            if any(len(target) < 1 for target in targets):
+                logger.error(f"Iteration={iteration + 1} || Image Ids used for training {_} || targets Length={[len(target) for target in targets]}" )
+                continue
+            data_time = time.time() - end
+            iteration = iteration + 1
+            arguments["iteration"] = iteration
 
-        # Q: How can scheduler affect optimizer in terms of learning rate warm-up? They are two separate objects.
-        # A: Inside the scheduler, there is an optimizer reference.
-        scheduler.step()
+            # Q: How can scheduler affect optimizer in terms of learning rate warm-up? They are two separate objects.
+            # A: Inside the scheduler, there is an optimizer reference.
+            scheduler.step()
 
-        images = images.to(device)
-        targets = [target.to(device) for target in targets]
+            images = images.to(device)
+            targets = [target.to(device) for target in targets]
 
-        loss_dict = model(images, targets)
+            loss_dict = model(images, targets)
 
-        losses = sum(loss for loss in loss_dict.values())
+            losses = sum(loss for loss in loss_dict.values())
 
-        # reduce losses over all GPUs for logging purposes
-        loss_dict_reduced = reduce_loss_dict(loss_dict)
-        losses_reduced = sum(loss for loss in loss_dict_reduced.values())
-        meters.update(loss=losses_reduced, **loss_dict_reduced)
+            # reduce losses over all GPUs for logging purposes
+            loss_dict_reduced = reduce_loss_dict(loss_dict)
+            losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+            meters.update(loss=losses_reduced, **loss_dict_reduced)
 
-        optimizer.zero_grad()
-        # Note: If mixed precision is not used, this ends up doing nothing
-        # Otherwise apply loss scaling for mixed-precision recipe
-        with amp.scale_loss(losses, optimizer) as scaled_losses:
-            scaled_losses.backward()
-        optimizer.step()
+            optimizer.zero_grad()
+            # Note: If mixed precision is not used, this ends up doing nothing
+            # Otherwise apply loss scaling for mixed-precision recipe
+            with amp.scale_loss(losses, optimizer) as scaled_losses:
+                scaled_losses.backward()
+            optimizer.step()
 
-        batch_time = time.time() - end
-        end = time.time()
-        meters.update(time=batch_time, data=data_time)
+            batch_time = time.time() - end
+            end = time.time()
+            meters.update(time=batch_time, data=data_time)
 
-        eta_seconds = meters.time.global_avg * (max_iter - iteration)
-        eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+            eta_seconds = meters.time.global_avg * (max_iter - iteration)
+            eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
 
-        if iteration % 20 == 0 or iteration == max_iter:
-            logger.info(
-                meters.delimiter.join(
-                    [
-                        "eta: {eta}",
-                        "iter: {iter}",
-                        "{meters}",
-                        "lr: {lr:.6f}",
-                        "max mem: {memory:.0f}",
-                    ]
-                ).format(
-                    eta=eta_string,
-                    iter=iteration,
-                    meters=str(meters),
-                    lr=optimizer.param_groups[0]["lr"],
-                    memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
+            if iteration % 20 == 0 or iteration == max_iter:
+                logger.info(
+                    meters.delimiter.join(
+                        [
+                            "eta: {eta}",
+                            "iter: {iter}",
+                            "{meters}",
+                            "lr: {lr:.6f}",
+                            "max mem: {memory:.0f}",
+                        ]
+                    ).format(
+                        eta=eta_string,
+                        iter=iteration,
+                        meters=str(meters),
+                        lr=optimizer.param_groups[0]["lr"],
+                        memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
+                    )
                 )
-            )
 
-            if visualizer:
-                # post loss on the visdom plate
-                visualizer.add_data_point(loss_dict_reduced)
+                if visualizer:
+                    # post loss on the visdom plate
+                    visualizer.add_data_point(loss_dict_reduced)
 
-        if iteration % checkpoint_period == 0:
-            checkpointer.save("model_{:07d}".format(iteration), **arguments)
-        if iteration == max_iter:
-            checkpointer.save("model_final", **arguments)
+            if iteration % checkpoint_period == 0:
+                checkpointer.save("model_{:07d}".format(iteration), **arguments)
+            if iteration == max_iter:
+                checkpointer.save("model_final", **arguments)
+    except KeyboardInterrupt:
+        logger.info('Stopping early. Saving network...')
+        checkpointer.save("model_{:07d}".format(iteration), **arguments)
+        exit()
 
     total_training_time = time.time() - start_training_time
     total_time_str = str(datetime.timedelta(seconds=total_training_time))
@@ -129,3 +135,5 @@ def do_train(
             total_time_str, total_training_time / (max_iter)
         )
     )
+
+    

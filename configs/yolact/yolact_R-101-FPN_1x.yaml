@@ -65,11 +65,11 @@ MODEL:
     # yolact loss weight (working)
     MASK_WEIGHT: 1.0
     MASK_WITH_LOGITS: False
-# VISUAL:
-#   LOSS_KEYS:
-#   - loss_retina_cls
-#   - loss_retina_reg
-#   - loss_yolact_mask
+VISUAL:
+  LOSS_KEYS:
+  - loss_retina_cls
+  - loss_retina_reg
+  - loss_yolact_mask
 DATASETS:
   TRAIN: ("coco_2017_train",)
   TEST: ("coco_2017_val",)
@@ -89,6 +89,7 @@ SOLVER:
   MAX_ITER: 400000
   IMS_PER_BATCH: 8
   WARMUP_FACTOR: 0.1
+  CHECKPOINT_PERIOD: 10000
 
   # BASE_LR: 0.005
   # WEIGHT_DECAY: 0.0001
