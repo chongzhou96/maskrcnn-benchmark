@@ -24,6 +24,8 @@ from maskrcnn_benchmark.utils.comm import synchronize, get_rank
 from maskrcnn_benchmark.utils.imports import import_file
 from maskrcnn_benchmark.utils.logger import setup_logger
 from maskrcnn_benchmark.utils.miscellaneous import mkdir, save_config
+from maskrcnn_benchmark.utils.visualize import Visualizer
+
 
 # See if we can use apex.DistributedDataParallel instead of the torch default,
 # and enable mixed-precision via apex.amp
@@ -74,6 +76,17 @@ def train(cfg, local_rank, distributed):
 
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
 
+    if len(cfg.VISUAL.LOSS_KEYS) > 0 and \
+        torch.cuda.current_device() == cfg.VISUAL.GPU_RANK:
+        visualizer = Visualizer(
+            loss_keys=cfg.VISUAL.LOSS_KEYS,
+            env=cfg.OUTPUT_DIR.split('/')[-1],
+            port=cfg.VISUAL.PORT,
+            hostname=cfg.VISUAL.HOSTNAME
+        )
+    else:
+        visualizer = None
+
     do_train(
         model,
         data_loader,
@@ -83,6 +96,7 @@ def train(cfg, local_rank, distributed):
         device,
         checkpoint_period,
         arguments,
+        visualizer,
     )
 
     return model

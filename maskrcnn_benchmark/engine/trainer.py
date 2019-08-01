@@ -45,6 +45,7 @@ def do_train(
     device,
     checkpoint_period,
     arguments,
+    visualizer,
 ):
     logger = logging.getLogger("maskrcnn_benchmark.trainer")
     logger.info("Start training")
@@ -111,6 +112,11 @@ def do_train(
                     memory=torch.cuda.max_memory_allocated() / 1024.0 / 1024.0,
                 )
             )
+
+            if visualizer:
+                # post loss on the visdom plate
+                visualizer.add_data_point(loss_dict_reduced)
+
         if iteration % checkpoint_period == 0:
             checkpointer.save("model_{:07d}".format(iteration), **arguments)
         if iteration == max_iter:

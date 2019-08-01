@@ -373,6 +373,16 @@ _C.MODEL.YOLACT.MASK_WITH_LOGITS = False
 _C.MODEL.YOLACT.USE_FAST_NMS = False
 
 # ---------------------------------------------------------------------------- #
+# Visualizer Options
+# ---------------------------------------------------------------------------- #
+_C.VISUAL = CN()
+# If empty, the visualizer would be disabled. If you want to track the loss, please provide the loss names in a list. 
+_C.VISUAL.LOSS_KEYS = [] 
+_C.VISUAL.PORT = 8081
+_C.VISUAL.HOSTNAME = 'http://localhost'
+_C.VISUAL.GPU_RANK = 0
+
+# ---------------------------------------------------------------------------- #
 # FBNet options
 # ---------------------------------------------------------------------------- #
 _C.MODEL.FBNET = CN()

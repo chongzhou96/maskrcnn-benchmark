@@ -8,19 +8,19 @@ batch=1
 subset_size=-1
 
 if [ "$#" -ge 1 ]; then
-    $config=$1
+    subset_size=$1
 fi
 
 if [ "$#" -ge 2 ]; then
-    $nproc=$2
+    nproc=$2
 fi
 
 if [ "$#" -ge 3 ]; then
-    $batch=$3
+    batch=$3
 fi
 
 if [ "$#" -ge 4 ]; then
-    $subset_size=$4
+    config=$4
 fi
 
 python -m torch.distributed.launch --nproc_per_node=$nproc tools/test_net.py \

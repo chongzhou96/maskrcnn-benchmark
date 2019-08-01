@@ -6,11 +6,11 @@ config='configs/yolact/yolact_R-101-FPN_1x.yaml'
 nproc=2
 
 if [ "$#" -ge 1 ]; then
-    $config=$1
+    nproc=$1
 fi
 
 if [ "$#" -ge 2 ]; then
-    $nproc=$2
+    config=$2
 fi
 
 python -m torch.distributed.launch --nproc_per_node=$nproc tools/train_net.py --config-file $config
