@@ -1,20 +1,23 @@
 from visdom import Visdom
 import numpy as np
+import logging
 
-class Visualizer():
+class Visualizer(object):
 
     def __init__(self, loss_keys, env, port, hostname):
-        print('Launching visdom server ...')
+        logger = logging.getLogger("maskrcnn_benchmark.visualize")
+        logger.info('Launching visdom server ...')
+
         self.viz = Visdom(env=env, port=port, server=hostname)
         assert self.viz.check_connection(timeout_seconds=3), \
             'No connection could be formed quickly'
 
         self.title = env
         self.loss_keys = loss_keys
-        self.colors, self.lines = self.get_loss_line_attribute(len(loss_keys))
+        self.colors, self.lines = self._get_loss_line_attribute(len(loss_keys))
         self.loss_log_dict = {}
 
-    def get_loss_line_attribute(self, cnt):
+    def _get_loss_line_attribute(self, cnt):
         COLORS = [[244,  67,  54],
                 [233,  30,  99],
                 [156,  39, 17],
@@ -40,7 +43,7 @@ class Visualizer():
 
         return np.array(colors), np.array(lines)
 
-    def moving_average(self, data, window=40):
+    def _moving_average(self, data, window=40):
         if len(data) < 2*window:
             return data
         ret = np.cumsum(data, dtype=float)
@@ -54,7 +57,7 @@ class Visualizer():
             if key not in self.loss_log_dict:
                 self.loss_log_dict[key] = []
             self.loss_log_dict[key].append(loss_dict_reduced[key].item())
-            y = self.moving_average(self.loss_log_dict[key])
+            y = self._moving_average(self.loss_log_dict[key])
             x = np.arange(0, len(y))
             X.append(x)
             Y.append(y)

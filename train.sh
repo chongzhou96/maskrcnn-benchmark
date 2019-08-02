@@ -13,5 +13,4 @@ if [ "$#" -ge 2 ]; then
     config=$2
 fi
 
-python -m torch.distributed.launch --nproc_per_node=$nproc tools/train_net.py --config-file $config \
-    --local_rank 0
+python -m torch.distributed.launch --nproc_per_node=$nproc tools/train_net.py --config-file $config

@@ -115,7 +115,7 @@ def do_train(
                     )
                 )
 
-                if visualizer:
+                if visualizer is not None:
                     # post loss on the visdom plate
                     visualizer.add_data_point(loss_dict_reduced)
 

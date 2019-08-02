@@ -76,13 +76,12 @@ def train(cfg, local_rank, distributed):
 
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
 
-    if len(cfg.VISUAL.LOSS_KEYS) > 0 and \
-        torch.cuda.current_device() == cfg.VISUAL.GPU_RANK:
+    if len(cfg.VISUAL.LOSS_KEYS) > 0 and get_rank() == 0:
         visualizer = Visualizer(
             loss_keys=cfg.VISUAL.LOSS_KEYS,
             env=cfg.OUTPUT_DIR.split('/')[-1],
             port=cfg.VISUAL.PORT,
-            hostname=cfg.VISUAL.HOSTNAME
+            hostname=cfg.VISUAL.HOSTNAME,
         )
     else:
         visualizer = None
@@ -185,10 +184,10 @@ def main():
     logger.info("\n" + collect_env_info())
 
     logger.info("Loaded configuration file {}".format(args.config_file))
-    with open(args.config_file, "r") as cf:
-        config_str = "\n" + cf.read()
-        logger.info(config_str)
-    logger.info("Running with config:\n{}".format(cfg))
+    # with open(args.config_file, "r") as cf:
+    #     config_str = "\n" + cf.read()
+    #     logger.info(config_str)
+    # logger.info("Running with config:\n{}".format(cfg))
 
     output_config_path = os.path.join(cfg.OUTPUT_DIR, 'config.yml')
     logger.info("Saving config into: {}".format(output_config_path))

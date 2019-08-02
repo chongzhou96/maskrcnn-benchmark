@@ -380,7 +380,6 @@ _C.VISUAL = CN()
 _C.VISUAL.LOSS_KEYS = [] 
 _C.VISUAL.PORT = 8081
 _C.VISUAL.HOSTNAME = 'http://localhost'
-_C.VISUAL.GPU_RANK = 0
 
 # ---------------------------------------------------------------------------- #
 # FBNet options
