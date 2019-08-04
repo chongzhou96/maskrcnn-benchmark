@@ -62,8 +62,11 @@ MODEL:
     # less mask weights (failed)
     # MASK_WEIGHT: 0.1
     # MASK_WITH_LOGITS: False
-    # yolact loss weight (working)
-    MASK_WEIGHT: 1.0
+    # yolact loss weight (failed)
+    # MASK_WEIGHT: 1.0
+    # MASK_WITH_LOGITS: False
+    # yolact_sigmoid_less_mask_weights
+    MASK_WEIGHT: 2.0
     MASK_WITH_LOGITS: False
 VISUAL:
   LOSS_KEYS:
@@ -84,6 +87,7 @@ TEST:
   DETECTIONS_PER_IMG: 100
 SOLVER:
   BASE_LR: 1e-3
+  BASE_LR: 5e-4
   WEIGHT_DECAY: 5e-4
   STEPS: (280000, 360000,)
   MAX_ITER: 400000
@@ -91,12 +95,7 @@ SOLVER:
   WARMUP_FACTOR: 0.1
   CHECKPOINT_PERIOD: 10000
 
-  # BASE_LR: 0.005
-  # WEIGHT_DECAY: 0.0001
-  # STEPS: (120000, 160000)
-  # MAX_ITER: 180000
-  # IMS_PER_BATCH: 8
-
+  # MASK-RCNN
   # BASE_LR: 0.02
   # WEIGHT_DECAY: 0.0001
   # STEPS: (60000, 80000)
@@ -105,13 +104,14 @@ SOLVER:
 
 # OUTPUT_DIR: ./weights/debug
 
-# yolact loss weight (working)
-OUTPUT_DIR: ./weights/yolact_loss_weight
-
 # list in time sequence
-# yolact (failed)
+# yolact (failed): use binary_cross_entropy_with_logits for mask loss
 # OUTPUT_DIR: ./weights/yolact
-# yolact sigmoid (failed)
+# yolact sigmoid (failed): use sigmoid + binary_cross_entropy to replace binary_cross_entropy_with_logits
 # OUTPUT_DIR: ./weights/yolact_sigmoid
-# less weights (failed)
+# less weights (failed): less weights on mask loss, from 100x to 10x
 # OUTPUT_DIR: ./weights/yolact_sigmoid_less_mask_weights
+# yolact loss weight (failed): use *sum* instead of *mean* on mask loss [BUG fixed]
+# OUTPUT_DIR: ./weights/yolact_loss_weight
+# yolact sigmoid less mask weights (working)
+OUTPUT_DIR: ./weights/yolact_sigmoid_less_mask_weights

@@ -35,6 +35,9 @@ _C.MODEL.CLS_AGNOSTIC_BBOX_REG = False
 # path
 _C.MODEL.WEIGHT = ""
 
+# Whether or not use latest model
+_C.MODEL.USE_LATEST = True
+
 
 # -----------------------------------------------------------------------------
 # INPUT

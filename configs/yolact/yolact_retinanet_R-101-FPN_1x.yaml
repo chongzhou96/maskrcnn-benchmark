@@ -108,13 +108,5 @@ SOLVER:
 
 # OUTPUT_DIR: ./weights/debug
 
-# yolact loss weight (working)
+# yolact retinanet (working)
 OUTPUT_DIR: ./weights/yolact_retinanet
-
-# list in time sequence
-# yolact (failed)
-# OUTPUT_DIR: ./weights/yolact
-# yolact sigmoid (failed)
-# OUTPUT_DIR: ./weights/yolact_sigmoid
-# less weights (failed)
-# OUTPUT_DIR: ./weights/yolact_sigmoid_less_mask_weights

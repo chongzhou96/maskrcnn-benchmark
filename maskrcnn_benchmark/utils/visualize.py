@@ -4,7 +4,7 @@ import logging
 
 class Visualizer(object):
 
-    def __init__(self, loss_keys, env, port, hostname):
+    def __init__(self, loss_keys, env, port, hostname, loss_log_dict=None):
         logger = logging.getLogger("maskrcnn_benchmark.visualize")
         logger.info('Launching visdom server ...')
 
@@ -15,7 +15,10 @@ class Visualizer(object):
         self.title = env
         self.loss_keys = loss_keys
         self.colors, self.lines = self._get_loss_line_attribute(len(loss_keys))
-        self.loss_log_dict = {}
+        if loss_log_dict is None:
+            self.loss_log_dict = {}
+        else:
+            self.loss_log_dict = loss_log_dict
 
     def _get_loss_line_attribute(self, cnt):
         COLORS = [[244,  67,  54],
@@ -74,3 +77,5 @@ class Visualizer(object):
             win = 1,
         )
     
+    def get_loss_log_dict(self):
+        return self.loss_log_dict

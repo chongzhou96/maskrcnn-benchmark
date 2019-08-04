@@ -64,7 +64,7 @@ def train(cfg, local_rank, distributed):
     checkpointer = DetectronCheckpointer(
         cfg, model, optimizer, scheduler, output_dir, save_to_disk
     )
-    extra_checkpoint_data = checkpointer.load(cfg.MODEL.WEIGHT)
+    extra_checkpoint_data = checkpointer.load(cfg.MODEL.WEIGHT, use_latest=cfg.MODEL.USE_LATEST)
     arguments.update(extra_checkpoint_data)
 
     data_loader = make_data_loader(
@@ -76,12 +76,13 @@ def train(cfg, local_rank, distributed):
 
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
 
-    if len(cfg.VISUAL.LOSS_KEYS) > 0 and get_rank() == 0:
+    if len(cfg.VISUAL.LOSS_KEYS) > 0 and get_rank() == 0:    
         visualizer = Visualizer(
             loss_keys=cfg.VISUAL.LOSS_KEYS,
             env=cfg.OUTPUT_DIR.split('/')[-1],
             port=cfg.VISUAL.PORT,
             hostname=cfg.VISUAL.HOSTNAME,
+            loss_log_dict= arguments["loss_log_dict"] if "loss_log_dict" in arguments else None
         )
     else:
         visualizer = None
@@ -106,7 +107,7 @@ def run_test(cfg, model, distributed):
         model = model.module
     torch.cuda.empty_cache()  # TODO check if it helps
     iou_types = ("bbox",)
-    if cfg.MODEL.MASK_ON:
+    if cfg.MODEL.MASK_ON or cfg.MODEL.YOLACT_ON:
         iou_types = iou_types + ("segm",)
     if cfg.MODEL.KEYPOINT_ON:
         iou_types = iou_types + ("keypoints",)
@@ -124,11 +125,13 @@ def run_test(cfg, model, distributed):
             data_loader_val,
             dataset_name=dataset_name,
             iou_types=iou_types,
-            box_only=False if cfg.MODEL.RETINANET_ON else cfg.MODEL.RPN_ONLY,
+            box_only=False if cfg.MODEL.RETINANET_ON or cfg.MODEL.YOLACT_ON else cfg.MODEL.RPN_ONLY,
             device=cfg.MODEL.DEVICE,
             expected_results=cfg.TEST.EXPECTED_RESULTS,
             expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
             output_folder=output_folder,
+            # whether yolact has already converted the masks to rle format
+            mask_is_rle=cfg.MODEL.YOLACT.CONVERT_MASK_TO_RLE,
         )
         synchronize()
 

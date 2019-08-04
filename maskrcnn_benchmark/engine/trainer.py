@@ -118,6 +118,7 @@ def do_train(
                 if visualizer is not None:
                     # post loss on the visdom plate
                     visualizer.add_data_point(loss_dict_reduced)
+                    arguments["loss_log_dict"] = visualizer.get_loss_log_dict()
 
             if iteration % checkpoint_period == 0:
                 checkpointer.save("model_{:07d}".format(iteration), **arguments)
