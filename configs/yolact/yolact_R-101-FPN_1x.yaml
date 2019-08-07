@@ -65,8 +65,8 @@ MODEL:
     # yolact loss weight (failed)
     # MASK_WEIGHT: 1.0
     # MASK_WITH_LOGITS: False
-    # yolact_sigmoid_less_mask_weights
-    MASK_WEIGHT: 2.0
+    # yolact loss weight less mask weights (working)
+    MASK_WEIGHT: 1.5
     MASK_WITH_LOGITS: False
 VISUAL:
   LOSS_KEYS:
@@ -85,6 +85,7 @@ DATALOADER:
   SUBSET_SIZE: -1
 TEST:
   DETECTIONS_PER_IMG: 100
+  USE_YOLACT_COCO_EVAL: True
 SOLVER:
   BASE_LR: 1e-3
   BASE_LR: 5e-4
@@ -113,5 +114,5 @@ SOLVER:
 # OUTPUT_DIR: ./weights/yolact_sigmoid_less_mask_weights
 # yolact loss weight (failed): use *sum* instead of *mean* on mask loss [BUG fixed]
 # OUTPUT_DIR: ./weights/yolact_loss_weight
-# yolact sigmoid less mask weights (working)
-OUTPUT_DIR: ./weights/yolact_sigmoid_less_mask_weights
+# yolact loss weight less mask weights (working)
+OUTPUT_DIR: ./weights/yolact_loss_weight_less_mask_weights

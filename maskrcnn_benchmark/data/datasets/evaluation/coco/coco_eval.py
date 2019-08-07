@@ -5,12 +5,13 @@ import torch
 from collections import OrderedDict
 from tqdm import tqdm
 
+from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
 from maskrcnn_benchmark.structures.mask_ops import convert_binary_to_rle, resize_rle
 
-DEBUG = True
+DEBUG = False
 
 def do_coco_evaluation(
     dataset,
@@ -20,7 +21,6 @@ def do_coco_evaluation(
     iou_types,
     expected_results,
     expected_results_sigma_tol,
-    mask_is_rle,
 ):
     logger = logging.getLogger("maskrcnn_benchmark.inference")
 
@@ -47,7 +47,7 @@ def do_coco_evaluation(
         coco_results["bbox"] = prepare_for_coco_detection(predictions, dataset)
     if "segm" in iou_types:
         logger.info("Preparing segm results")
-        coco_results["segm"] = prepare_for_coco_segmentation(predictions, dataset, mask_is_rle)
+        coco_results["segm"] = prepare_for_coco_segmentation(predictions, dataset)
     if 'keypoints' in iou_types:
         logger.info('Preparing keypoints results')
         coco_results['keypoints'] = prepare_for_coco_keypoint(predictions, dataset)
@@ -105,7 +105,7 @@ def prepare_for_coco_detection(predictions, dataset):
     return coco_results
 
 
-def prepare_for_coco_segmentation(predictions, dataset, mask_is_rle):
+def prepare_for_coco_segmentation(predictions, dataset):
 
     masker = Masker(threshold=0.5, padding=1)
     # assert isinstance(dataset, COCODataset)
@@ -119,18 +119,16 @@ def prepare_for_coco_segmentation(predictions, dataset, mask_is_rle):
         image_width = img_info["width"]
         image_height = img_info["height"]
         prediction = prediction.resize((image_width, image_height))
-        masks = prediction.get_field("mask")
+        masks = prediction.get_field("masks")
         # t = time.time()
         # logger.info('Time mask: {}'.format(time.time() - t))
         # prediction = prediction.convert('xywh')
 
-        # boxes = prediction.bbox.tolist()
         scores = prediction.get_field("scores").tolist()
         labels = prediction.get_field("labels").tolist()
 
-        # rles = prediction.get_field('mask')
-
-        if not mask_is_rle:
+        
+        if not cfg.MODEL.YOLACT.CONVERT_MASK_TO_RLE:
             # Masker is necessary only if masks haven't been already resized.
             if list(masks.shape[-2:]) != [image_height, image_width]:
                 masks = masker(masks.expand(1, -1, -1, -1, -1), prediction)

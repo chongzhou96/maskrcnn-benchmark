@@ -461,6 +461,8 @@ _C.TEST.EXPECTED_RESULTS_SIGMA_TOL = 4
 _C.TEST.IMS_PER_BATCH = 8
 # Number of detections per image
 _C.TEST.DETECTIONS_PER_IMG = 100
+# Use Yolact COCO evaluation script
+_C.TEST.USE_YOLACT_COCO_EVAL = False
 
 # ---------------------------------------------------------------------------- #
 # Test-time augmentations for bounding box detection

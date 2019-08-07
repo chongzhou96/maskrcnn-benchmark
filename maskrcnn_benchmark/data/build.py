@@ -14,7 +14,6 @@ from . import samplers
 from .collate_batch import BatchCollator, BBoxAugCollator
 from .transforms import build_transforms
 
-
 def build_dataset(dataset_list, transforms, dataset_catalog, is_train=True, subset_size=-1):
     """
     Arguments:
@@ -35,7 +34,7 @@ def build_dataset(dataset_list, transforms, dataset_catalog, is_train=True, subs
         factory = getattr(D, data["factory"])
         args = data["args"]
         # for COCODataset, we want to remove images without annotations
-        # during training
+        # during training.
         if data["factory"] == "COCODataset":
             args["remove_images_without_annotations"] = is_train
             args["subset_size"] = subset_size

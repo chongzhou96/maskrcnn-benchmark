@@ -6,6 +6,7 @@ import numpy as np
 from ..utils import permute_and_flatten
 from .yolact import _ACTIVATION_FUNC
 
+from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.modeling.rpn.retinanet.inference import RetinaNetPostProcessor
 from maskrcnn_benchmark.modeling.box_coder import BoxCoder
 from maskrcnn_benchmark.modeling.utils import cat, jaccard
@@ -34,8 +35,6 @@ class YolactPostProcessor(RetinaNetPostProcessor):
         num_classes,
         mask_activation,
         mask_threshold,
-        convert_mask_to_rle,
-        use_fast_nms,
         box_coder=None,
     ):
         super(YolactPostProcessor, self).__init__(
@@ -44,8 +43,6 @@ class YolactPostProcessor(RetinaNetPostProcessor):
         )
         self.mask_activation = mask_activation
         self.mask_threshold = mask_threshold
-        self.convert_mask_to_rle = convert_mask_to_rle
-        self.use_fast_nms = use_fast_nms
 
     def forward_for_single_feature_map(self, anchors, box_cls, box_regression, coeffs):
         """
@@ -70,7 +67,7 @@ class YolactPostProcessor(RetinaNetPostProcessor):
 
         coeffs = permute_and_flatten(coeffs, N, A, K, H, W)
 
-        if self.use_fast_nms:
+        if cfg.MODEL.YOLACT.USE_FAST_NMS:
             num_anchors = A * H * W
             box_regression = cat([b for b in box_regression], dim=0)
             anchors_bbox = cat([a.bbox for a in anchors], dim=0)
@@ -243,7 +240,7 @@ class YolactPostProcessor(RetinaNetPostProcessor):
         for a, c, r, co in zip(anchors, box_cls, box_regression, coeffs):
             sampled_boxes.append(self.forward_for_single_feature_map(a, c, r, co))
 
-        if self.use_fast_nms:
+        if cfg.MODEL.YOLACT.USE_FAST_NMS:
             box_cls, bbox, coeffs = list(zip(*sampled_boxes))
             box_cls = cat(box_cls, dim=1)
             bbox = cat(bbox, dim=1)
@@ -251,11 +248,6 @@ class YolactPostProcessor(RetinaNetPostProcessor):
             results = []
             for prototypes_per_image, box_cls_per_image, bbox_per_image, coeffs_per_image, image_size in \
                 zip(prototypes, box_cls, bbox, coeffs, image_sizes):
-                # if DEBUG:
-                #     print(prototypes_per_image.shape)
-                #     print(box_cls_per_image.shape)
-                #     print(bbox_per_image.shape)
-                #     print(coeffs_per_image.shape)
 
                 box_cls_per_image, bbox_per_image, coeffs_per_image, labels_per_image = \
                     self.fast_nms(box_cls_per_image, bbox_per_image, coeffs_per_image)
@@ -264,37 +256,37 @@ class YolactPostProcessor(RetinaNetPostProcessor):
                 boxlists_per_image = BoxList(bbox_per_image, image_size, mode="xyxy")
 
                 # assemble mask
-                mask_pred_per_image = prototypes_per_image.permute(1, 2, 0) @ coeffs_per_image.t()
-                mask_pred_per_image = mask_pred_per_image.permute(2, 0, 1)
-                mask_pred_per_image = self.mask_activation(mask_pred_per_image)
+                masks_pred_per_image = prototypes_per_image.permute(1, 2, 0) @ coeffs_per_image.t()
+                masks_pred_per_image = masks_pred_per_image.permute(2, 0, 1)
+                masks_pred_per_image = self.mask_activation(masks_pred_per_image)
 
                 # crop
-                mask_h, mask_w = mask_pred_per_image.shape[1:]
+                mask_h, mask_w = masks_pred_per_image.shape[1:]
                 resized_pred_bbox = boxlists_per_image.resize((mask_w, mask_h))
-                mask_pred_per_image = crop_zero_out(mask_pred_per_image, resized_pred_bbox.bbox)
+                masks_pred_per_image = crop_zero_out(masks_pred_per_image, resized_pred_bbox.bbox)
 
                 # resize (height comes first here!)
                 img_w, img_h = boxlists_per_image.size
-                mask_pred_per_image = interpolate(
-                    input=mask_pred_per_image[None].float(),
+                masks_pred_per_image = interpolate(
+                    input=masks_pred_per_image[None].float(),
                     size=(img_h, img_w),
                     mode="bilinear",
                     align_corners=False,
-                )[0].type_as(mask_pred_per_image)
+                )[0].type_as(masks_pred_per_image)
 
                 # binarize
-                mask_pred_per_image = mask_pred_per_image > self.mask_threshold
+                masks_pred_per_image = masks_pred_per_image > self.mask_threshold
 
                 # convert mask predictions to rle format (used by COCO evaluation)
                 # for now, this won't affect the Pascal VOC evaluation because Pascal doesn't consider mask mAP
-                if self.convert_mask_to_rle:
+                if cfg.MODEL.YOLACT.CONVERT_MASK_TO_RLE and not cfg.TEST.USE_YOLACT_COCO_EVAL:
                     cpu_device = torch.device("cpu")
-                    mask_pred_per_image = [m[None].to(cpu_device) for m in mask_pred_per_image]
-                    mask_pred_per_image = convert_binary_to_rle(mask_pred_per_image)
+                    masks_pred_per_image = [m[None].to(cpu_device) for m in masks_pred_per_image]
+                    masks_pred_per_image = convert_binary_to_rle(masks_pred_per_image)
                 else:
-                    mask_pred_per_image = mask_pred_per_image[:, None]
+                    masks_pred_per_image = masks_pred_per_image[:, None]
 
-                boxlists_per_image.add_field("mask", mask_pred_per_image)
+                boxlists_per_image.add_field("masks", masks_pred_per_image)
                 boxlists_per_image.add_field("labels", labels_per_image)
                 boxlists_per_image.add_field("scores", box_cls_per_image)
                 results.append(boxlists_per_image)
@@ -317,99 +309,42 @@ class YolactPostProcessor(RetinaNetPostProcessor):
                     print('range of prototypes_per_image:',\
                         prototypes_per_image.min(), prototypes_per_image.max())
 
-                # if DEBUG:
-                #     print('shape of coeffs_per_image:', coeffs_per_image.shape)
-
                 # assemble mask
-                mask_pred_per_image = prototypes_per_image.permute(1, 2, 0) @ coeffs_per_image.t()
-                mask_pred_per_image = mask_pred_per_image.permute(2, 0, 1)
-
-                # if DEBUG:
-                #     print('[before] range of mask_pred_per_image:',\
-                #          mask_pred_per_image.min(), mask_pred_per_image.max())
-
-                mask_pred_per_image = self.mask_activation(mask_pred_per_image)
-
-                if DEBUG:
-                    # print('[after] range of mask_pred_per_image:',\
-                    #      mask_pred_per_image.min(), mask_pred_per_image.max())
-
-                    with torch.no_grad():
-                        # torch.set_printoptions(profile="full")
-                        # with open('before.txt', 'w') as f:
-                        #     print(mask_pred_per_image.to("cpu")[30], file=f)
-                        # torch.set_printoptions(profile="default")
-
-                        plt.figure(1)
-                        plt.imshow(mask_pred_per_image.cpu()[30])
-
-                        # save_image(mask_pred_per_image[30], 'before.png')
-
-                        # print(mask_pred_per_image.device, mask_pred_per_image.dtype)
+                masks_pred_per_image = prototypes_per_image.permute(1, 2, 0) @ coeffs_per_image.t()
+                masks_pred_per_image = masks_pred_per_image.permute(2, 0, 1)
+                masks_pred_per_image = self.mask_activation(masks_pred_per_image)
 
                 # crop
-                mask_h, mask_w = mask_pred_per_image.shape[1:]
+                mask_h, mask_w = masks_pred_per_image.shape[1:]
                 resized_pred_bbox = boxlists_per_image.resize((mask_w, mask_h))
-                mask_pred_per_image = crop_zero_out(mask_pred_per_image, resized_pred_bbox.bbox)
-
-                if DEBUG:
-                    with torch.no_grad():
-                        # torch.set_printoptions(profile="full")
-                        # with open('after.txt', 'w') as f:
-                        #     print(mask_pred_per_image.to("cpu")[30], file=f)
-                        # torch.set_printoptions(profile="default")
-
-                        plt.figure(2)
-                        plt.imshow(mask_pred_per_image.cpu()[30])
-
-                        # save_image(mask_pred_per_image[30], 'after.png')
-
-                        # print(mask_pred_per_image.device, mask_pred_per_image.dtype)
-                        # exit()
+                masks_pred_per_image = crop_zero_out(masks_pred_per_image, resized_pred_bbox.bbox)
 
                 # resize (height comes first here!)
                 img_w, img_h = boxlists_per_image.size
-                mask_pred_per_image = interpolate(
-                    input=mask_pred_per_image[None].float(),
+                masks_pred_per_image = interpolate(
+                    input=masks_pred_per_image[None].float(),
                     size=(img_h, img_w),
                     mode="bilinear",
                     align_corners=False,
-                )[0].type_as(mask_pred_per_image)
-
-                # if DEBUG:
-                #     print('[no sigmoid] range of mask_pred_per_image:',\
-                #          mask_pred_per_image.min(), mask_pred_per_image.max())
+                )[0].type_as(masks_pred_per_image)
 
                 # binarize
-                mask_pred_per_image = mask_pred_per_image > self.mask_threshold
-
-                if DEBUG:
-                    with torch.no_grad():
-                        # torch.set_printoptions(profile="full")
-                        # with open('after_binary.txt', 'w') as f:
-                        #     print(mask_pred_per_image.to("cpu")[30], file=f)
-                        # torch.set_printoptions(profile="default")
-
-                        plt.figure(3)
-                        plt.imshow(mask_pred_per_image.to("cpu")[30])
-                        plt.show()
-
-                        # save_image(mask_pred_per_image[30], 'after_binary.png')
-                        # exit()
+                masks_pred_per_image = masks_pred_per_image > self.mask_threshold
 
                 # convert mask predictions to rle format (used by COCO evaluation)
-                # for now, this won't affect the Pascal VOC evaluation because Pascal doesn't consider mask mAP
-                if self.convert_mask_to_rle:
+                # for now, this won't affect the Pascal VOC evaluation because Pascal doesn't consider mask mAP.
+                # Note: the input of YOLACT_COCO_EVAL is not rle
+                if cfg.MODEL.YOLACT.CONVERT_MASK_TO_RLE and not cfg.TEST.USE_YOLACT_COCO_EVAL:
                     cpu_device = torch.device("cpu")
-                    mask_pred_per_image = [m[None].to(cpu_device) for m in mask_pred_per_image]
-                    mask_pred_per_image = convert_binary_to_rle(mask_pred_per_image)
+                    masks_pred_per_image = [m[None].to(cpu_device) for m in masks_pred_per_image]
+                    masks_pred_per_image = convert_binary_to_rle(masks_pred_per_image)
                 else:
-                    mask_pred_per_image = mask_pred_per_image[:, None]
+                    masks_pred_per_image = masks_pred_per_image[:, None, :, :]
 
-                boxlists_per_image.add_field("mask", mask_pred_per_image)
+                boxlists_per_image.add_field("masks", masks_pred_per_image)
                 results.append(boxlists_per_image)
 
-        return results
+            return results
 
 def make_yolact_postprocessor(config, box_coder):
     pre_nms_thresh = config.MODEL.RETINANET.INFERENCE_TH
@@ -427,8 +362,8 @@ def make_yolact_postprocessor(config, box_coder):
         num_classes=config.MODEL.RETINANET.NUM_CLASSES,
         mask_activation=_ACTIVATION_FUNC[config.MODEL.YOLACT.MASK_ACTIVATION],
         mask_threshold=config.MODEL.ROI_MASK_HEAD.POSTPROCESS_MASKS_THRESHOLD,
-        convert_mask_to_rle=config.MODEL.YOLACT.CONVERT_MASK_TO_RLE,
-        use_fast_nms=config.MODEL.YOLACT.USE_FAST_NMS,
+        # convert_mask_to_rle=config.MODEL.YOLACT.CONVERT_MASK_TO_RLE,
+        # use_fast_nms=config.MODEL.YOLACT.USE_FAST_NMS,
         box_coder=box_coder,
     )
 

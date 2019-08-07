@@ -1,6 +1,5 @@
 from .coco_eval import do_coco_evaluation
 
-
 def coco_evaluation(
     dataset,
     predictions,
@@ -19,5 +18,4 @@ def coco_evaluation(
         iou_types=iou_types,
         expected_results=expected_results,
         expected_results_sigma_tol=expected_results_sigma_tol,
-        mask_is_rle = mask_is_rle,
     )

@@ -254,10 +254,10 @@ class COCODemo(object):
         #     print('size of prediction:', prediction.size)
         #     print('shape of mask:', prediction.get_field("mask").shape)
 
-        if prediction.has_field("mask"):
+        if prediction.has_field("masks"):
             # if we have masks, paste the masks in the right position
             # in the image, as defined by the bounding boxes
-            masks = prediction.get_field("mask")
+            masks = prediction.get_field("masks")
             # always single image is passed at a time
             if self.use_masker:
                 masks = self.masker([masks], [prediction])[0]
@@ -269,11 +269,11 @@ class COCODemo(object):
                     mode="bilinear",
                     align_corners=False,
                 ).type_as(masks)
-            prediction.add_field("mask", masks)
+            prediction.add_field("masks", masks)
 
         if DEBUG:
             print('size of prediction:', prediction.size)
-            print('shape of mask:', prediction.get_field("mask").shape)
+            print('shape of mask:', prediction.get_field("masks").shape)
 
         return prediction
 
@@ -339,7 +339,7 @@ class COCODemo(object):
             predictions (BoxList): the result of the computation by the model.
                 It should contain the field `mask` and `labels`.
         """
-        masks = predictions.get_field("mask").numpy()
+        masks = predictions.get_field("masks").numpy()
         labels = predictions.get_field("labels")
 
         colors = self.compute_colors_for_labels(labels).tolist()
@@ -372,9 +372,9 @@ class COCODemo(object):
         Arguments:
             image (np.ndarray): an image as returned by OpenCV
             predictions (BoxList): the result of the computation by the model.
-                It should contain the field `mask`.
+                It should contain the field `masks`.
         """
-        masks = predictions.get_field("mask")
+        masks = predictions.get_field("masks")
         masks_per_dim = self.masks_per_dim
         masks = L.interpolate(
             masks.float(), scale_factor=1 / masks_per_dim

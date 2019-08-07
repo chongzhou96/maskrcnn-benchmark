@@ -8,12 +8,12 @@ from tqdm import tqdm
 
 from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.data.datasets.evaluation import evaluate
+from maskrcnn_benchmark.data.datasets.evaluation.coco.yolact_coco_eval import do_yolact_coco_evaluation
 from ..utils.comm import is_main_process, get_world_size
 from ..utils.comm import all_gather
 from ..utils.comm import synchronize
 from ..utils.timer import Timer, get_time_str
 from .bbox_aug import im_detect_bbox_aug
-
 
 def compute_on_dataset(model, data_loader, device, timer=None):
     model.eval()
@@ -71,7 +71,6 @@ def inference(
         expected_results=(),
         expected_results_sigma_tol=4,
         output_folder=None,
-        mask_is_rle=False,
 ):
     # convert to a torch.device for efficiency
     device = torch.device(device)
@@ -79,6 +78,8 @@ def inference(
     logger = logging.getLogger("maskrcnn_benchmark.inference")
     dataset = data_loader.dataset
     logger.info("Start evaluation on {} dataset({} images).".format(dataset_name, len(dataset)))
+    if cfg.TEST.USE_YOLACT_COCO_EVAL:
+        return do_yolact_coco_evaluation(model, data_loader, device)
     total_timer = Timer()
     inference_timer = Timer()
     total_timer.tic()
@@ -113,7 +114,6 @@ def inference(
         iou_types=iou_types,
         expected_results=expected_results,
         expected_results_sigma_tol=expected_results_sigma_tol,
-        mask_is_rle=mask_is_rle,
     )
 
     return evaluate(dataset=dataset,
