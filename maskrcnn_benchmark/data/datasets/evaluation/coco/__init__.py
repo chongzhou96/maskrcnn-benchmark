@@ -8,7 +8,6 @@ def coco_evaluation(
     iou_types,
     expected_results,
     expected_results_sigma_tol,
-    mask_is_rle,
 ):
     return do_coco_evaluation(
         dataset=dataset,

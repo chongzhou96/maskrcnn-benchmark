@@ -4,6 +4,7 @@ import copy
 import logging
 
 import torch.utils.data
+from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.utils.comm import get_world_size
 from maskrcnn_benchmark.utils.imports import import_file
 from maskrcnn_benchmark.utils.miscellaneous import save_labels

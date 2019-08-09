@@ -2,6 +2,8 @@
 import torch
 import torchvision
 
+import numpy as np
+
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.segmentation_mask import SegmentationMask
 from maskrcnn_benchmark.structures.keypoint import PersonKeypoints
@@ -76,11 +78,20 @@ class COCODataset(torchvision.datasets.coco.CocoDetection):
 
         # filter crowd annotations
         # TODO might be better to add an extra field
+        
         anno = [obj for obj in anno if obj["iscrowd"] == 0]
+
+        # need by DanielCocoEval
+        # non_crowd = [obj for obj in anno if obj["iscrowd"] == 0]
+        # crowd = [obj for obj in anno if obj["iscrowd"] == 1]
+        # anno = non_crowd + crowd
+        # num_crowd = len(crowd)
 
         boxes = [obj["bbox"] for obj in anno]
         boxes = torch.as_tensor(boxes).reshape(-1, 4)  # guard against no boxes
         target = BoxList(boxes, img.size, mode="xywh").convert("xyxy")
+        # need by DanielCocoEval
+        # target.num_crowd = num_crowd
 
         classes = [obj["category_id"] for obj in anno]
         classes = [self.json_category_id_to_contiguous_id[c] for c in classes]
@@ -88,9 +99,9 @@ class COCODataset(torchvision.datasets.coco.CocoDetection):
         target.add_field("labels", classes)
 
         if anno and "segmentation" in anno[0]:
-            masks = [obj["segmentation"] for obj in anno]
-            masks = SegmentationMask(masks, img.size, mode='poly')
-            target.add_field("masks", masks)
+            masks = torch.stack([torch.from_numpy(self.coco.annToMask(obj)) for obj in anno])
+            masks = SegmentationMask(masks, img.size, mode='mask')
+            target.add_field("masks", masks)            
 
         if anno and "keypoints" in anno[0]:
             keypoints = [obj["keypoints"] for obj in anno]

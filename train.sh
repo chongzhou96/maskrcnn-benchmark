@@ -1,6 +1,6 @@
 # defaults
-config='configs/yolact/yolact_R-101-FPN_1x.yaml'
-# config='configs/yolact/yolact_retinanet_R-101-FPN_1x.yaml'
+# config='configs/yolact/yolact_R-101-FPN_1x.yaml'
+config='configs/yolact/yolact_retinanet_R-101-FPN_1x.yaml'
 # config='configs/e2e_mask_rcnn_R_101_FPN_1x.yaml'
 # config='configs/retinanet/retinanet_R-101-FPN_1x.yaml'
 

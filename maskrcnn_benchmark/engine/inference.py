@@ -7,8 +7,9 @@ import torch
 from tqdm import tqdm
 
 from maskrcnn_benchmark.config import cfg
+from maskrcnn_benchmark.data import datasets
 from maskrcnn_benchmark.data.datasets.evaluation import evaluate
-from maskrcnn_benchmark.data.datasets.evaluation.coco.yolact_coco_eval import do_yolact_coco_evaluation
+from maskrcnn_benchmark.data.datasets.evaluation.coco.coco_compute_and_eval import do_coco_compute_and_evalute
 from ..utils.comm import is_main_process, get_world_size
 from ..utils.comm import all_gather
 from ..utils.comm import synchronize
@@ -78,8 +79,10 @@ def inference(
     logger = logging.getLogger("maskrcnn_benchmark.inference")
     dataset = data_loader.dataset
     logger.info("Start evaluation on {} dataset({} images).".format(dataset_name, len(dataset)))
-    if cfg.TEST.USE_YOLACT_COCO_EVAL:
-        return do_yolact_coco_evaluation(model, data_loader, device)
+    # compute predictions and do evaluation in the same time to save memory
+    # TODO support multiple gpus evaluation
+    if not cfg.MODEL.YOLACT.CONVERT_MASK_TO_POLY and isinstance(dataset, datasets.COCODataset):
+        return do_coco_compute_and_evalute(model, data_loader, device, output_folder)
     total_timer = Timer()
     inference_timer = Timer()
     total_timer.tic()

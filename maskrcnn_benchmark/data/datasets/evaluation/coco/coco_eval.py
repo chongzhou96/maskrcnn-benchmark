@@ -9,9 +9,8 @@ from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
-from maskrcnn_benchmark.structures.mask_ops import convert_binary_to_rle, resize_rle
-
-DEBUG = False
+from maskrcnn_benchmark.structures.mask_ops import convert_binary_to_rle
+from maskrcnn_benchmark.structures.segmentation_mask import SegmentationMask
 
 def do_coco_evaluation(
     dataset,
@@ -118,27 +117,20 @@ def prepare_for_coco_segmentation(predictions, dataset):
         img_info = dataset.get_img_info(image_id)
         image_width = img_info["width"]
         image_height = img_info["height"]
+
         prediction = prediction.resize((image_width, image_height))
         masks = prediction.get_field("masks")
-        # t = time.time()
-        # logger.info('Time mask: {}'.format(time.time() - t))
-        # prediction = prediction.convert('xywh')
+        if isinstance(masks, SegmentationMask):
+            masks = masks.get_mask_tensor(do_squeeze=False)[:, None]
 
         scores = prediction.get_field("scores").tolist()
         labels = prediction.get_field("labels").tolist()
 
-        
-        if not cfg.MODEL.YOLACT.CONVERT_MASK_TO_RLE:
-            # Masker is necessary only if masks haven't been already resized.
-            if list(masks.shape[-2:]) != [image_height, image_width]:
-                masks = masker(masks.expand(1, -1, -1, -1, -1), prediction)
-                masks = masks[0]
-            rles = convert_binary_to_rle(masks)
-        else:
-            # move the conversion from binary mask to rle to yolact inference in order to save memory
-            rles = masks
-            # resize masks
-            rles = resize_rle(rles, (image_height, image_width))
+        # Masker is necessary only if masks haven't been already resized.
+        if list(masks.shape[-2:]) != [image_height, image_width]:
+            masks = masker(masks.expand(1, -1, -1, -1, -1), prediction)
+            masks = masks[0]
+        rles = convert_binary_to_rle(masks.cpu())
 
         mapped_labels = [dataset.contiguous_category_id_to_json_id[i] for i in labels]
 
@@ -153,6 +145,7 @@ def prepare_for_coco_segmentation(predictions, dataset):
                 for k, rle in enumerate(rles)
             ]
         )
+
     return coco_results
 
 

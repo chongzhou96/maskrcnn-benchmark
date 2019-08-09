@@ -35,6 +35,7 @@ class BoxList(object):
         self.size = image_size  # (image_width, image_height)
         self.mode = mode
         self.extra_fields = {}
+        self.num_crowd = 0
 
     def add_field(self, field, field_data):
         self.extra_fields[field] = field_data

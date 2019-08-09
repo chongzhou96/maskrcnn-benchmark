@@ -369,11 +369,14 @@ _C.MODEL.YOLACT.PROTONET = ((256, 3, {'padding':1}), (256, 3, {'padding':1}), (2
 _C.MODEL.YOLACT.PROTOTYPE_ACTIVATION = "relu"
 _C.MODEL.YOLACT.MASK_ACTIVATION = "sigmoid"
 _C.MODEL.YOLACT.COEFF_ACTIVATION = "tanh"
-_C.MODEL.YOLACT.CONVERT_MASK_TO_RLE = False
+_C.MODEL.YOLACT.CONVERT_MASK_TO_POLY = False
 _C.MODEL.YOLACT.MASK_TO_TRAIN = 100
 _C.MODEL.YOLACT.MASK_WEIGHT = 1.0
 _C.MODEL.YOLACT.MASK_WITH_LOGITS = False
 _C.MODEL.YOLACT.USE_FAST_NMS = False
+# During inference, #locs to select based on cls score before NMS is performed
+# per class level
+_C.MODEL.YOLACT.PRE_NMS_TOP_N = 200
 
 # ---------------------------------------------------------------------------- #
 # Visualizer Options
@@ -461,8 +464,6 @@ _C.TEST.EXPECTED_RESULTS_SIGMA_TOL = 4
 _C.TEST.IMS_PER_BATCH = 8
 # Number of detections per image
 _C.TEST.DETECTIONS_PER_IMG = 100
-# Use Yolact COCO evaluation script
-_C.TEST.USE_YOLACT_COCO_EVAL = False
 
 # ---------------------------------------------------------------------------- #
 # Test-time augmentations for bounding box detection

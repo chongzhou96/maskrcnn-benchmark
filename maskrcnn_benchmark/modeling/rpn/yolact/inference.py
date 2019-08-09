@@ -11,6 +11,7 @@ from maskrcnn_benchmark.modeling.rpn.retinanet.inference import RetinaNetPostPro
 from maskrcnn_benchmark.modeling.box_coder import BoxCoder
 from maskrcnn_benchmark.modeling.utils import cat, jaccard
 from maskrcnn_benchmark.structures.bounding_box import BoxList
+from maskrcnn_benchmark.structures.segmentation_mask import SegmentationMask
 from maskrcnn_benchmark.structures.boxlist_ops import cat_boxlist, boxlist_nms, remove_small_boxes
 from maskrcnn_benchmark.structures.mask_ops import crop_zero_out, convert_binary_to_rle
 from maskrcnn_benchmark.layers.misc import interpolate
@@ -67,30 +68,26 @@ class YolactPostProcessor(RetinaNetPostProcessor):
 
         coeffs = permute_and_flatten(coeffs, N, A, K, H, W)
 
-        if cfg.MODEL.YOLACT.USE_FAST_NMS:
-            num_anchors = A * H * W
-            box_regression = cat([b for b in box_regression], dim=0)
-            anchors_bbox = cat([a.bbox for a in anchors], dim=0)
-            bbox = self.box_coder.decode(
-                box_regression,
-                anchors_bbox
-            )
-            bbox = torch.stack(bbox.split(num_anchors))
-            return box_cls, bbox, coeffs
-        else:
-            candidate_inds = box_cls > self.pre_nms_thresh
-            pre_nms_top_n = candidate_inds.view(N, -1).sum(1)
-            pre_nms_top_n = pre_nms_top_n.clamp(max=self.pre_nms_top_n)
+        candidate_inds = box_cls > self.pre_nms_thresh
+        pre_nms_top_n = candidate_inds.view(N, -1).sum(1)
+        pre_nms_top_n = pre_nms_top_n.clamp(max=self.pre_nms_top_n)
 
-            results = []
-            for per_box_cls, per_box_regression, per_coeffs, \
-                per_pre_nms_top_n, per_candidate_inds, per_anchors in zip(
-                    box_cls, box_regression, coeffs, \
-                        pre_nms_top_n, candidate_inds, anchors):
+        results = []
+        for per_box_cls, per_box_regression, per_coeffs, \
+            per_pre_nms_top_n, per_candidate_inds, per_anchors in zip(
+                box_cls, box_regression, coeffs, \
+                    pre_nms_top_n, candidate_inds, anchors):
 
+            if cfg.MODEL.YOLACT.USE_FAST_NMS:
+                per_class = None
+                detections = self.box_coder.decode(
+                    per_box_regression,
+                    per_anchors.bbox
+                )
+            else:
                 # Sort and select TopN
                 per_box_cls = per_box_cls[per_candidate_inds]
-    
+
                 per_box_cls, top_k_indices = \
                         per_box_cls.topk(per_pre_nms_top_n, sorted=False)
 
@@ -101,10 +98,6 @@ class YolactPostProcessor(RetinaNetPostProcessor):
                 per_class = per_candidate_nonzeros[:, 1]
                 per_class += 1
 
-                # if DEBUG:
-                #     print('shape of per_anchors:', per_anchors.bbox.shape)
-                #     print('shape of per_box_regression:', per_box_regression.shape)
-
                 detections = self.box_coder.decode(
                     per_box_regression[per_box_loc, :].view(-1, 4),
                     per_anchors.bbox[per_box_loc, :].view(-1, 4)
@@ -112,20 +105,19 @@ class YolactPostProcessor(RetinaNetPostProcessor):
 
                 per_coeffs = per_coeffs[per_box_loc, :].view(-1, K)
 
-                image_size = per_anchors.size
-                boxlist = BoxList(detections, image_size, mode="xyxy")
+            image_size = per_anchors.size
+            boxlist = BoxList(detections, image_size, mode="xyxy")
+            if per_class is not None:
                 boxlist.add_field("labels", per_class)
-                boxlist.add_field("scores", per_box_cls)
-                boxlist.add_field("coeffs", per_coeffs)
-                boxlist = boxlist.clip_to_image(remove_empty=False)
-                boxlist = remove_small_boxes(boxlist, self.min_size)
-                results.append(boxlist)
+            boxlist.add_field("scores", per_box_cls)
+            boxlist.add_field("coeffs", per_coeffs)
+            boxlist = boxlist.clip_to_image(remove_empty=False)
+            boxlist = remove_small_boxes(boxlist, self.min_size)
+            results.append(boxlist)
 
-            return results
+        return results
     
-    def fast_nms(
-        self, box_cls, bbox, coeffs, 
-        ):
+    def fast_nms(self, box_cls, bbox, coeffs):
         box_cls_max, _ = torch.max(box_cls, dim=1)
         keep = (box_cls_max > self.pre_nms_thresh)
         box_cls = box_cls[keep]
@@ -169,12 +161,6 @@ class YolactPostProcessor(RetinaNetPostProcessor):
         bbox = bbox[idx]
         coeffs = coeffs[idx]
 
-        # if DEBUG:
-        #     print(box_cls.shape)
-        #     print(bbox.shape)
-        #     print(coeffs.shape)
-        #     print(labels.shape)
-
         return box_cls, bbox, coeffs, labels
 
     def select_over_all_levels(self, boxlists):
@@ -182,51 +168,57 @@ class YolactPostProcessor(RetinaNetPostProcessor):
         results = []
         for i in range(num_images):
             scores = boxlists[i].get_field("scores")
-            labels = boxlists[i].get_field("labels")
             coeffs = boxlists[i].get_field("coeffs")
             boxes = boxlists[i].bbox
             boxlist = boxlists[i]
-            result = []
-            # skip the background
-            for j in range(1, self.num_classes):
-                inds = (labels == j).nonzero().squeeze(1)
+            if cfg.MODEL.YOLACT.USE_FAST_NMS:
+                scores, boxes, coeffs, labels = self.fast_nms(scores, boxes, coeffs)
+                result = BoxList(boxes, boxlist.size, mode="xyxy")
+                result.add_field("scores", scores)
+                result.add_field("coeffs", coeffs)
+                result.add_field("labels", labels)
+            else:
+                labels = boxlists[i].get_field("labels")
+                result = []
+                # skip the background
+                for j in range(1, self.num_classes):
+                    inds = (labels == j).nonzero().squeeze(1)
 
-                if inds.numel() == 0:
-                    continue
+                    # if inds.numel() == 0:
+                    #     continue
 
-                scores_j = scores[inds]
-                coeffs_j = coeffs[inds, :]
-                boxes_j = boxes[inds, :]
-                boxlist_for_class = BoxList(boxes_j, boxlist.size, mode="xyxy")
-                boxlist_for_class.add_field("scores", scores_j)
-                boxlist_for_class.add_field("coeffs", coeffs_j)
-                # per class nms
-                boxlist_for_class = boxlist_nms(
-                    boxlist_for_class, self.nms_thresh,
-                    score_field="scores"
-                )
-                num_labels = len(boxlist_for_class)
-                boxlist_for_class.add_field(
-                    "labels", torch.full((num_labels,), j,
-                                         dtype=torch.int64,
-                                         device=scores.device)
-                )
-                result.append(boxlist_for_class)
+                    scores_j = scores[inds]
+                    coeffs_j = coeffs[inds, :]
+                    boxes_j = boxes[inds, :]
+                    boxlist_for_class = BoxList(boxes_j, boxlist.size, mode="xyxy")
+                    boxlist_for_class.add_field("scores", scores_j)
+                    boxlist_for_class.add_field("coeffs", coeffs_j)
+                    # per class nms
+                    boxlist_for_class = boxlist_nms(
+                        boxlist_for_class, self.nms_thresh,
+                        score_field="scores"
+                    )
+                    num_labels = len(boxlist_for_class)
+                    boxlist_for_class.add_field(
+                        "labels", torch.full((num_labels,), j,
+                                            dtype=torch.int64,
+                                            device=scores.device)
+                    )
+                    result.append(boxlist_for_class)
+                result = cat_boxlist(result)
+            
+                # Limit to max_per_image detections **over all classes**
+                number_of_detections = len(result)
+                if number_of_detections > self.fpn_post_nms_top_n > 0:
+                    cls_scores = result.get_field("scores")
+                    image_thresh, _ = torch.kthvalue(
+                        cls_scores.cpu(),
+                        number_of_detections - self.fpn_post_nms_top_n + 1
+                    )
+                    keep = cls_scores >= image_thresh.item()
+                    keep = torch.nonzero(keep).squeeze(1)
+                    result = result[keep]
 
-            result = cat_boxlist(result)
-            number_of_detections = len(result)
-
-            # Limit to max_per_image detections **over all classes**
-            if number_of_detections > self.fpn_post_nms_top_n > 0:
-                cls_scores = result.get_field("scores")
-                image_thresh, _ = torch.kthvalue(
-                    cls_scores.cpu(),
-                    number_of_detections - self.fpn_post_nms_top_n + 1
-                )
-                keep = cls_scores >= image_thresh.item()
-                keep = torch.nonzero(keep).squeeze(1)
-                result = result[keep]
-            # print("number of positive:", len(result))
             results.append(result)
         return results
 
@@ -234,121 +226,64 @@ class YolactPostProcessor(RetinaNetPostProcessor):
         sampled_boxes = []
         num_levels = len(box_cls)
         anchors = list(zip(*anchors))
-        image_sizes = []
-        for a in anchors[0]:
-            image_sizes.append(a.size)
+        
         for a, c, r, co in zip(anchors, box_cls, box_regression, coeffs):
             sampled_boxes.append(self.forward_for_single_feature_map(a, c, r, co))
 
-        if cfg.MODEL.YOLACT.USE_FAST_NMS:
-            box_cls, bbox, coeffs = list(zip(*sampled_boxes))
-            box_cls = cat(box_cls, dim=1)
-            bbox = cat(bbox, dim=1)
-            coeffs = cat(coeffs, dim=1)
-            results = []
-            for prototypes_per_image, box_cls_per_image, bbox_per_image, coeffs_per_image, image_size in \
-                zip(prototypes, box_cls, bbox, coeffs, image_sizes):
+        boxlists = list(zip(*sampled_boxes))
+        boxlists = [cat_boxlist(boxlist) for boxlist in boxlists]
 
-                box_cls_per_image, bbox_per_image, coeffs_per_image, labels_per_image = \
-                    self.fast_nms(box_cls_per_image, bbox_per_image, coeffs_per_image)
-                
-                # TODO anchors_per_image is only used for getting the image size which is kind of a waste
-                boxlists_per_image = BoxList(bbox_per_image, image_size, mode="xyxy")
+        if num_levels > 1:
+            boxlists = self.select_over_all_levels(boxlists)
 
-                # assemble mask
-                masks_pred_per_image = prototypes_per_image.permute(1, 2, 0) @ coeffs_per_image.t()
-                masks_pred_per_image = masks_pred_per_image.permute(2, 0, 1)
-                masks_pred_per_image = self.mask_activation(masks_pred_per_image)
+        results = []
+        for prototypes_per_image, boxlists_per_image in zip(prototypes, boxlists):
 
-                # crop
-                mask_h, mask_w = masks_pred_per_image.shape[1:]
-                resized_pred_bbox = boxlists_per_image.resize((mask_w, mask_h))
-                masks_pred_per_image = crop_zero_out(masks_pred_per_image, resized_pred_bbox.bbox)
+            coeffs_per_image = boxlists_per_image.get_field("coeffs")
 
-                # resize (height comes first here!)
-                img_w, img_h = boxlists_per_image.size
-                masks_pred_per_image = interpolate(
-                    input=masks_pred_per_image[None].float(),
-                    size=(img_h, img_w),
-                    mode="bilinear",
-                    align_corners=False,
-                )[0].type_as(masks_pred_per_image)
+            # if DEBUG:
+            #     print('range of prototypes_per_image:',\
+            #         prototypes_per_image.min(), prototypes_per_image.max())
 
-                # binarize
-                masks_pred_per_image = masks_pred_per_image > self.mask_threshold
+            # assemble mask
+            masks_pred_per_image = prototypes_per_image.permute(1, 2, 0) @ coeffs_per_image.t()
+            masks_pred_per_image = masks_pred_per_image.permute(2, 0, 1)
+            masks_pred_per_image = self.mask_activation(masks_pred_per_image)
 
-                # convert mask predictions to rle format (used by COCO evaluation)
-                # for now, this won't affect the Pascal VOC evaluation because Pascal doesn't consider mask mAP
-                if cfg.MODEL.YOLACT.CONVERT_MASK_TO_RLE and not cfg.TEST.USE_YOLACT_COCO_EVAL:
-                    cpu_device = torch.device("cpu")
-                    masks_pred_per_image = [m[None].to(cpu_device) for m in masks_pred_per_image]
-                    masks_pred_per_image = convert_binary_to_rle(masks_pred_per_image)
-                else:
-                    masks_pred_per_image = masks_pred_per_image[:, None]
+            # crop
+            mask_h, mask_w = masks_pred_per_image.shape[1:]
+            resized_pred_bbox = boxlists_per_image.resize((mask_w, mask_h))
+            masks_pred_per_image = crop_zero_out(masks_pred_per_image, resized_pred_bbox.bbox)
 
-                boxlists_per_image.add_field("masks", masks_pred_per_image)
-                boxlists_per_image.add_field("labels", labels_per_image)
-                boxlists_per_image.add_field("scores", box_cls_per_image)
-                results.append(boxlists_per_image)
-                
-            return results
-                
-        else:
-            boxlists = list(zip(*sampled_boxes))
-            boxlists = [cat_boxlist(boxlist) for boxlist in boxlists]
-
-            if num_levels > 1:
-                boxlists = self.select_over_all_levels(boxlists)
-
-            results = []
-            for prototypes_per_image, boxlists_per_image in zip(prototypes, boxlists):
-
-                coeffs_per_image = boxlists_per_image.get_field("coeffs")
-
+            # binarize
+            masks_pred_per_image = masks_pred_per_image > self.mask_threshold
+            
+            # convert mask predictions to polygon format to save memory
+            if cfg.MODEL.YOLACT.CONVERT_MASK_TO_POLY:
+                cpu_device = torch.device("cpu")
+                masks_pred_per_image = SegmentationMask(masks_pred_per_image.to(cpu_device), \
+                    (mask_w, mask_h), "mask")
                 if DEBUG:
-                    print('range of prototypes_per_image:',\
-                        prototypes_per_image.min(), prototypes_per_image.max())
+                    print(len(masks_pred_per_image), mask_w, mask_h)
+                masks_pred_per_image = masks_pred_per_image.convert("poly")
+            else:
+                masks_pred_per_image = SegmentationMask(masks_pred_per_image, (mask_w, mask_h), "mask")
+            
+            if DEBUG:
+                print(len(masks_pred_per_image), mask_w, mask_h)
 
-                # assemble mask
-                masks_pred_per_image = prototypes_per_image.permute(1, 2, 0) @ coeffs_per_image.t()
-                masks_pred_per_image = masks_pred_per_image.permute(2, 0, 1)
-                masks_pred_per_image = self.mask_activation(masks_pred_per_image)
+            # resize
+            img_w, img_h = boxlists_per_image.size
+            masks_pred_per_image = masks_pred_per_image.resize((img_w, img_h))
 
-                # crop
-                mask_h, mask_w = masks_pred_per_image.shape[1:]
-                resized_pred_bbox = boxlists_per_image.resize((mask_w, mask_h))
-                masks_pred_per_image = crop_zero_out(masks_pred_per_image, resized_pred_bbox.bbox)
+            boxlists_per_image.add_field("masks", masks_pred_per_image)
+            results.append(boxlists_per_image)
 
-                # resize (height comes first here!)
-                img_w, img_h = boxlists_per_image.size
-                masks_pred_per_image = interpolate(
-                    input=masks_pred_per_image[None].float(),
-                    size=(img_h, img_w),
-                    mode="bilinear",
-                    align_corners=False,
-                )[0].type_as(masks_pred_per_image)
-
-                # binarize
-                masks_pred_per_image = masks_pred_per_image > self.mask_threshold
-
-                # convert mask predictions to rle format (used by COCO evaluation)
-                # for now, this won't affect the Pascal VOC evaluation because Pascal doesn't consider mask mAP.
-                # Note: the input of YOLACT_COCO_EVAL is not rle
-                if cfg.MODEL.YOLACT.CONVERT_MASK_TO_RLE and not cfg.TEST.USE_YOLACT_COCO_EVAL:
-                    cpu_device = torch.device("cpu")
-                    masks_pred_per_image = [m[None].to(cpu_device) for m in masks_pred_per_image]
-                    masks_pred_per_image = convert_binary_to_rle(masks_pred_per_image)
-                else:
-                    masks_pred_per_image = masks_pred_per_image[:, None, :, :]
-
-                boxlists_per_image.add_field("masks", masks_pred_per_image)
-                results.append(boxlists_per_image)
-
-            return results
+        return results
 
 def make_yolact_postprocessor(config, box_coder):
     pre_nms_thresh = config.MODEL.RETINANET.INFERENCE_TH
-    pre_nms_top_n = config.MODEL.RETINANET.PRE_NMS_TOP_N
+    pre_nms_top_n = config.MODEL.YOLACT.PRE_NMS_TOP_N
     nms_thresh = config.MODEL.RETINANET.NMS_TH
     fpn_post_nms_top_n = config.TEST.DETECTIONS_PER_IMG
     min_size = 0
@@ -362,8 +297,6 @@ def make_yolact_postprocessor(config, box_coder):
         num_classes=config.MODEL.RETINANET.NUM_CLASSES,
         mask_activation=_ACTIVATION_FUNC[config.MODEL.YOLACT.MASK_ACTIVATION],
         mask_threshold=config.MODEL.ROI_MASK_HEAD.POSTPROCESS_MASKS_THRESHOLD,
-        # convert_mask_to_rle=config.MODEL.YOLACT.CONVERT_MASK_TO_RLE,
-        # use_fast_nms=config.MODEL.YOLACT.USE_FAST_NMS,
         box_coder=box_coder,
     )
 

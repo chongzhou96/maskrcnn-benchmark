@@ -50,7 +50,6 @@ class BinaryMaskList(object):
 
         assert isinstance(size, (list, tuple))
         assert len(size) == 2
-
         if isinstance(masks, torch.Tensor):
             # The raw data representation is passed as argument
             masks = masks.clone()
@@ -96,7 +95,6 @@ class BinaryMaskList(object):
                 "Type of `masks` argument could not be interpreted:%s"
                 % type(masks)
             )
-
         if len(masks.shape) == 2:
             # if only a single instance mask is passed
             masks = masks[None]
@@ -223,6 +221,8 @@ class PolygonInstance(object):
                 p = torch.as_tensor(p, dtype=torch.float32)
                 if len(p) >= 6:  # 3 * 2 coordinates
                     valid_polygons.append(p)
+                else:
+                    valid_polygons.append(torch.zeros(6, dtype=torch.float32))
             polygons = valid_polygons
 
         elif isinstance(polygons, PolygonInstance):
