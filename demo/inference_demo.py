@@ -13,19 +13,19 @@ from tqdm import tqdm
 # params
 args = fu.Args()
 args.dataset = 'COCO' 
-args.config_file = "configs/yolact/yolact_R-101-FPN_1x.yaml"
+args.config_file = "configs/yolact/yolact_retinanet_R-101-FPN_1x.yaml"
 # args.config_file = "configs/e2e_mask_rcnn_R_101_FPN_1x.yaml"
 args.data_dir = 'datasets/coco/images'
-args.vis_dir = 'weights/yolact_2/inference/coco_2017_val/output'
+args.vis_dir = 'weights/yolact_retinanet/inference/coco_2017_val/output'
 args.postfix = 'jpg'
 args.rand_seed = 777
 args.conf_thresh = 0.5
 args.img_num = 10
 args.opts = []
-with open('weights/yolact_2/last_checkpoint', 'r') as f:
+with open('weights/yolact_retinanet/last_checkpoint', 'r') as f:
     last_checkpoint = f.read()
 args.opts += ['MODEL.WEIGHT', last_checkpoint]
-args.opts += ['MODEL.YOLACT.CONVERT_MASK_TO_RLE', False]
+args.opts += ['MODEL.YOLACT.CONVERT_MASK_TO_POLY', False]
 
 # update the config options with the config file
 cfg.merge_from_file(args.config_file)

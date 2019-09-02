@@ -12,7 +12,6 @@ from maskrcnn_benchmark.engine.bbox_aug import im_detect_bbox_aug
 from maskrcnn_benchmark.structures.mask_ops import convert_binary_to_rle
 from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
 from maskrcnn_benchmark.structures.segmentation_mask import SegmentationMask
-from maskrcnn_benchmark.utils.comm import is_main_process
 
 def do_coco_compute_and_evalute(
     model,

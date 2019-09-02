@@ -29,9 +29,13 @@ dist/
 .vscode
 
 # MacOS
-.DS_Store
+*.DS_Store
 
 # project dirs
 /datasets
 /models
 /output
+weights
+
+# not ready
+maskrcnn_benchmark/data/datasets/evaluation/coco/daniel_coco_eval.py

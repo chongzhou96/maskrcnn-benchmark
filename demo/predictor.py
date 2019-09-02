@@ -9,7 +9,7 @@ from maskrcnn_benchmark.structures.image_list import to_image_list
 from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
 from maskrcnn_benchmark import layers as L
 from maskrcnn_benchmark.utils import cv2_util
-from maskrcnn_benchmark.layers.misc import interpolate
+from maskrcnn_benchmark.structures.segmentation_mask import SegmentationMask
 
 DEBUG = False
 
@@ -250,25 +250,15 @@ class COCODemo(object):
         height, width = original_image.shape[:-1]
         prediction = prediction.resize((width, height))
 
-        # if DEBUG:
-        #     print('size of prediction:', prediction.size)
-        #     print('shape of mask:', prediction.get_field("mask").shape)
-
         if prediction.has_field("masks"):
             # if we have masks, paste the masks in the right position
             # in the image, as defined by the bounding boxes
             masks = prediction.get_field("masks")
+            if isinstance(masks, SegmentationMask):
+                masks = masks.get_mask_tensor(do_squeeze=False)[:, None]
             # always single image is passed at a time
-            if self.use_masker:
-                masks = self.masker([masks], [prediction])[0]
-            else:
-                # resize (height comes first here!)
-                masks = interpolate(
-                    input=masks.float(),
-                    size=(height, width),
-                    mode="bilinear",
-                    align_corners=False,
-                ).type_as(masks)
+            # if self.use_masker:
+            masks = self.masker([masks], [prediction])[0]
             prediction.add_field("masks", masks)
 
         if DEBUG:
