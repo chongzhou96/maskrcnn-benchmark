@@ -81,8 +81,9 @@ def inference(
     logger.info("Start evaluation on {} dataset({} images).".format(dataset_name, len(dataset)))
     # compute predictions and do evaluation in the same time to save memory
     # TODO support multiple gpus evaluation
-    if not cfg.MODEL.YOLACT.CONVERT_MASK_TO_POLY and isinstance(dataset, datasets.COCODataset):
-        return do_coco_compute_and_evalute(model, data_loader, device, output_folder)
+    if cfg.MODEL.YOLACT_ON and not cfg.MODEL.YOLACT.CONVERT_MASK_TO_POLY and \
+        isinstance(dataset, datasets.COCODataset):
+            return do_coco_compute_and_evalute(model, data_loader, device, output_folder)
     total_timer = Timer()
     inference_timer = Timer()
     total_timer.tic()

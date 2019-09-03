@@ -57,7 +57,7 @@ class MaskPostProcessor(nn.Module):
             bbox = BoxList(box.bbox, box.size, mode="xyxy")
             for field in box.fields():
                 bbox.add_field(field, box.get_field(field))
-            bbox.add_field("mask", prob)
+            bbox.add_field("masks", prob)
 
             results.append(bbox)
 
@@ -84,7 +84,7 @@ class MaskPostProcessorCOCOFormat(MaskPostProcessor):
             ]
             for rle in rles:
                 rle["counts"] = rle["counts"].decode("utf-8")
-            result.add_field("mask", rles)
+            result.add_field("masks", rles)
         return results
 
 

@@ -1,6 +1,7 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-101"
+  # WEIGHT: "catalog://ImageNetPretrained/MSRA/R-101"
+  WEIGHT: "weights/mask_rcnn/e2e_mask_rcnn_R_101_FPN_1x.pth"
   BACKBONE:
     CONV_BODY: "R-101-FPN"
   RESNETS:
